@@ -1,56 +1,24 @@
 package ch.adjudicator.client;
 
+import lombok.Value;
+
 /**
  * Information about a completed game.
  */
+@Value
 public class GameOverInfo {
-    private final GameResult result;
-    private final String reason;
-    private final String finalPgn;
-    
     /**
-     * Create game over information.
-     * 
-     * @param result Game result from the agent's perspective
-     * @param reason Reason for game end (e.g., "CHECKMATE", "TIMEOUT", "ILLEGAL_MOVE")
-     * @param finalPgn Complete game in PGN format
+     * Result from the agent's perspective (WIN, LOSS, or DRAW).
      */
-    public GameOverInfo(GameResult result, String reason, String finalPgn) {
-        this.result = result;
-        this.reason = reason;
-        this.finalPgn = finalPgn;
-    }
-    
+    GameResult result;
+
     /**
-     * Get the game result.
-     * 
-     * @return Result from the agent's perspective (WIN, LOSS, or DRAW)
+     * Reason for game end (e.g., "CHECKMATE", "TIMEOUT", "ILLEGAL_MOVE").
      */
-    public GameResult getResult() {
-        return result;
-    }
-    
+    String reason;
+
     /**
-     * Get the reason for game end.
-     * 
-     * @return Reason string (e.g., "CHECKMATE", "TIMEOUT", "STALEMATE")
+     * Complete game in PGN format.
      */
-    public String getReason() {
-        return reason;
-    }
-    
-    /**
-     * Get the final game in PGN format.
-     * 
-     * @return Complete game notation
-     */
-    public String getFinalPgn() {
-        return finalPgn;
-    }
-    
-    @Override
-    public String toString() {
-        return String.format("GameOverInfo{result=%s, reason='%s'}",
-                result, reason);
-    }
+    String finalPgn;
 }

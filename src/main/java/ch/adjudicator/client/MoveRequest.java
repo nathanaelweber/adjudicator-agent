@@ -1,56 +1,25 @@
 package ch.adjudicator.client;
 
+import lombok.Value;
+
 /**
  * Request for the agent to make a move.
  */
+@Value
 public class MoveRequest {
-    private final String opponentMove;
-    private final int yourTimeMs;
-    private final int opponentTimeMs;
-    
     /**
-     * Create a move request.
-     * 
-     * @param opponentMove The opponent's last move (empty string for first move)
-     * @param yourTimeMs Your remaining time in milliseconds
-     * @param opponentTimeMs Opponent's remaining time in milliseconds
+     * The opponent's last move in Long Algebraic Notation.
+     * Empty string if it's the first move of the game (and you are White).
      */
-    public MoveRequest(String opponentMove, int yourTimeMs, int opponentTimeMs) {
-        this.opponentMove = opponentMove;
-        this.yourTimeMs = yourTimeMs;
-        this.opponentTimeMs = opponentTimeMs;
-    }
-    
+    String opponentMove;
+
     /**
-     * Get the opponent's last move.
-     * 
-     * @return Move in Long Algebraic Notation, or empty string for first move
+     * Your remaining time in milliseconds.
      */
-    public String getOpponentMove() {
-        return opponentMove;
-    }
-    
+    int yourTimeMs;
+
     /**
-     * Get your remaining time.
-     * 
-     * @return Remaining time in milliseconds
+     * Opponent's remaining time in milliseconds.
      */
-    public int getYourTimeMs() {
-        return yourTimeMs;
-    }
-    
-    /**
-     * Get opponent's remaining time.
-     * 
-     * @return Remaining time in milliseconds
-     */
-    public int getOpponentTimeMs() {
-        return opponentTimeMs;
-    }
-    
-    @Override
-    public String toString() {
-        return String.format("MoveRequest{opponentMove='%s', yourTime=%dms, opponentTime=%dms}",
-                opponentMove, yourTimeMs, opponentTimeMs);
-    }
+    int opponentTimeMs;
 }

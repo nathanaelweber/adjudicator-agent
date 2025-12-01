@@ -1,40 +1,29 @@
 package ch.adjudicator.client;
 
+import lombok.Value;
+
 /**
  * Information about a started game.
  */
+@Value
 public class GameInfo {
-    private final String gameId;
-    private final Color color;
-    private final int initialTimeMs;
-    private final int incrementMs;
-    
-    public GameInfo(String gameId, Color color, int initialTimeMs, int incrementMs) {
-        this.gameId = gameId;
-        this.color = color;
-        this.initialTimeMs = initialTimeMs;
-        this.incrementMs = incrementMs;
-    }
-    
-    public String getGameId() {
-        return gameId;
-    }
-    
-    public Color getColor() {
-        return color;
-    }
-    
-    public int getInitialTimeMs() {
-        return initialTimeMs;
-    }
-    
-    public int getIncrementMs() {
-        return incrementMs;
-    }
-    
-    @Override
-    public String toString() {
-        return String.format("GameInfo{gameId='%s', color=%s, initialTime=%dms, increment=%dms}",
-                gameId, color, initialTimeMs, incrementMs);
-    }
+    /**
+     * The unique ID of the game.
+     */
+    String gameId;
+
+    /**
+     * The color assigned to the agent.
+     */
+    Color color;
+
+    /**
+     * The initial time on the clock in milliseconds.
+     */
+    int initialTimeMs;
+
+    /**
+     * The time increment per move in milliseconds.
+     */
+    int incrementMs;
 }

@@ -36,6 +36,8 @@ public class AdjudicatorClient {
 
     /**
      * Connect to the server via gRPC and play a game.
+     * <p>
+     * This method blocks the current thread until the game is concluded.
      *
      * @param agent       Agent instance implementing the Agent interface
      * @param mode        Game mode (TRAINING, OPEN, or RANKED)

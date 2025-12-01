@@ -3,13 +3,13 @@ package ch.adjudicator.agent;
 import ch.adjudicator.client.*;
 import com.github.bhlangonijr.chesslib.Board;
 import com.github.bhlangonijr.chesslib.move.Move;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.Random;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.LockSupport;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 /**
  * Easy Agent Example for Adjudicator Chess Contest Platform.
@@ -17,7 +17,7 @@ import java.util.logging.Logger;
  * and generate legal moves. It selects randomly from all legal moves.
  */
 public class EasyAgent implements Agent {
-    private static final Logger LOGGER = Logger.getLogger(EasyAgent.class.getName());
+    private static final Logger LOGGER = LoggerFactory.getLogger(EasyAgent.class);
 
     private final String name;
     private final Random random;
@@ -31,20 +31,18 @@ public class EasyAgent implements Agent {
 
     @Override
     public String getMove(MoveRequest request) throws Exception {
-        LOGGER.info(String.format("[%s] My turn! Time remaining: %dms",
-                name, request.getYourTimeMs()));
+        LOGGER.info("[{}] My turn! Time remaining: {}ms", name, request.getYourTimeMs());
 
         // Update board with opponent's move if present
         if (!request.getOpponentMove().isEmpty()) {
             String opponentMove = request.getOpponentMove();
-            LOGGER.info(String.format("[%s] Opponent played: %s", name, opponentMove));
+            LOGGER.info("[{}] Opponent played: {}", name, opponentMove);
 
             try {
                 Move move = parseMove(opponentMove);
                 board.doMove(move);
             } catch (Exception e) {
-                LOGGER.log(Level.WARNING, String.format("[%s] Failed to parse opponent move: %s",
-                        name, opponentMove), e);
+                LOGGER.warn("[{}] Failed to parse opponent move: {}", name, opponentMove, e);
                 // If we can't parse the move, reset the board and continue
                 // This shouldn't happen in normal gameplay
             }
@@ -54,7 +52,7 @@ public class EasyAgent implements Agent {
         List<Move> legalMoves = board.legalMoves();
 
         if (legalMoves.isEmpty()) {
-            LOGGER.severe(String.format("[%s] No legal moves available!", name));
+            LOGGER.error("[{}] No legal moves available!", name);
             throw new Exception("No legal moves available");
         }
 
@@ -66,19 +64,18 @@ public class EasyAgent implements Agent {
 
         // Convert to Long Algebraic Notation (LAN)
         String moveStr = moveToLAN(selectedMove);
-        LOGGER.info(String.format("[%s] Playing move: %s (from %d legal moves)",
-                name, moveStr, legalMoves.size()));
+        LOGGER.info("[{}] Playing move: {} (from {} legal moves)", name, moveStr, legalMoves.size());
         LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(100));
         return moveStr;
     }
 
     @Override
     public void onGameStart(GameInfo info) {
-        LOGGER.info(String.format("[%s] *** Game Started ***", name));
-        LOGGER.info(String.format("[%s] Game ID: %s", name, info.getGameId()));
-        LOGGER.info(String.format("[%s] Playing as: %s", name, info.getColor()));
-        LOGGER.info(String.format("[%s] Time control: %dms + %dms increment",
-                name, info.getInitialTimeMs(), info.getIncrementMs()));
+        LOGGER.info("[{}] *** Game Started ***", name);
+        LOGGER.info("[{}] Game ID: {}", name, info.getGameId());
+        LOGGER.info("[{}] Playing as: {}", name, info.getColor());
+        LOGGER.info("[{}] Time control: {}ms + {}ms increment",
+                name, info.getInitialTimeMs(), info.getIncrementMs());
 
         // Reset the board for a new game
         board = new Board();
@@ -86,21 +83,17 @@ public class EasyAgent implements Agent {
 
     @Override
     public void onGameOver(GameOverInfo info) {
-        // Use System.out to ensure immediate output
-        System.out.printf("[%s] *** Game Over ***%n", name);
-        System.out.printf("[%s] Result: %s%n", name, info.getResult());
-        System.out.printf("[%s] Reason: %s%n", name, info.getReason());
+        LOGGER.info("[{}] *** Game Over ***", name);
+        LOGGER.info("[{}] Result: {}", name, info.getResult());
+        LOGGER.info("[{}] Reason: {}", name, info.getReason());
         if (!info.getFinalPgn().isEmpty()) {
-            System.out.printf("[%s] Final PGN:\n%s%n", name, info.getFinalPgn());
+            LOGGER.info("[{}] Final PGN:\n{}", name, info.getFinalPgn());
         }
-        System.out.flush();
     }
 
     @Override
     public void onError(String message) {
-        // Use System.err to ensure immediate output
-        System.err.printf("[%s] ERROR: %s%n", name, message);
-        System.err.flush();
+        LOGGER.error("[{}] ERROR: {}", name, message);
     }
 
     /**
@@ -131,17 +124,44 @@ public class EasyAgent implements Agent {
      * Examples: "e2e4", "e7e8q" (for promotion to queen)
      */
     private String moveToLAN(Move move) {
-
         return move.toString().toLowerCase();
     }
 
     public static void main(String[] args) {
+        // Default values
+        String defaultServer = "grpc.adjudicator.ch";
+        String defaultKey = "1234";
+        String defaultName = "EasyBot";
+
+        // Check for agent.env file
+        try {
+            java.io.File envFile = new java.io.File("agent.env");
+            if (envFile.exists()) {
+                java.util.Properties props = new java.util.Properties();
+                try (java.io.FileInputStream fis = new java.io.FileInputStream(envFile)) {
+                    props.load(fis);
+                    if (props.getProperty("SERVER") != null && !props.getProperty("SERVER").isEmpty()) {
+                        defaultServer = props.getProperty("SERVER");
+                    }
+                    if (props.getProperty("API_KEY") != null && !props.getProperty("API_KEY").isEmpty()) {
+                        defaultKey = props.getProperty("API_KEY");
+                    }
+                    if (props.getProperty("AGENT_NAME") != null && !props.getProperty("AGENT_NAME").isEmpty()) {
+                        defaultName = props.getProperty("AGENT_NAME");
+                    }
+                    LOGGER.info("Loaded configuration from agent.env");
+                }
+            }
+        } catch (Exception e) {
+            LOGGER.warn("Failed to load agent.env: {}", e.getMessage());
+        }
+
         // Parse command line arguments
-        String serverAddr = getArg(args, "--server", "grpc.adjudicator.ch");
-        String apiKey = getArg(args, "--key", "1234");
+        String serverAddr = getArg(args, "--server", defaultServer);
+        String apiKey = getArg(args, "--key", defaultKey);
         String modeStr = getArg(args, "--mode", "TRAINING");
         String timeControl = getArg(args, "--time", "300+0");
-        String agentName = getArg(args, "--name", "EasyBot");
+        String agentName = getArg(args, "--name", defaultName);
 
         if (apiKey == null) {
             System.err.println("API key is required. Use --key <api-key>");
@@ -159,10 +179,10 @@ public class EasyAgent implements Agent {
             return;
         }
 
-        LOGGER.info("Starting " + agentName + " agent...");
-        LOGGER.info("Server: " + serverAddr);
-        LOGGER.info("Mode: " + modeStr);
-        LOGGER.info("Time control: " + timeControl);
+        LOGGER.info("Starting {} agent...", agentName);
+        LOGGER.info("Server: {}", serverAddr);
+        LOGGER.info("Mode: {}", modeStr);
+        LOGGER.info("Time control: {}", timeControl);
         LOGGER.info("Protocol: gRPC");
 
         // Create agent
@@ -175,7 +195,7 @@ public class EasyAgent implements Agent {
             client.playGame(agent, mode, timeControl);
             LOGGER.info("Agent finished successfully");
         } catch (Exception e) {
-            LOGGER.log(Level.SEVERE, "Game error", e);
+            LOGGER.error("Game error", e);
             System.exit(1);
         }
     }
