@@ -128,87 +128,44 @@ public class EasyAgent implements Agent {
     }
 
     public static void main(String[] args) {
-        // Default values
-        String defaultServer = "grpc.adjudicator.ch";
-        String defaultKey = "1234";
-        String defaultName = "EasyBot";
+        AgentConfiguration config = new AgentConfiguration(args);
 
-        // Check for agent.env file
         try {
-            java.io.File envFile = new java.io.File("agent.env");
-            if (envFile.exists()) {
-                java.util.Properties props = new java.util.Properties();
-                try (java.io.FileInputStream fis = new java.io.FileInputStream(envFile)) {
-                    props.load(fis);
-                    if (props.getProperty("SERVER") != null && !props.getProperty("SERVER").isEmpty()) {
-                        defaultServer = props.getProperty("SERVER");
-                    }
-                    if (props.getProperty("API_KEY") != null && !props.getProperty("API_KEY").isEmpty()) {
-                        defaultKey = props.getProperty("API_KEY");
-                    }
-                    if (props.getProperty("AGENT_NAME") != null && !props.getProperty("AGENT_NAME").isEmpty()) {
-                        defaultName = props.getProperty("AGENT_NAME");
-                    }
-                    LOGGER.info("Loaded configuration from agent.env");
-                }
-            }
-        } catch (Exception e) {
-            LOGGER.warn("Failed to load agent.env: {}", e.getMessage());
-        }
-
-        // Parse command line arguments
-        String serverAddr = getArg(args, "--server", defaultServer);
-        String apiKey = getArg(args, "--key", defaultKey);
-        String modeStr = getArg(args, "--mode", "TRAINING");
-        String timeControl = getArg(args, "--time", "300+0");
-        String agentName = getArg(args, "--name", defaultName);
-
-        if (apiKey == null) {
-            System.err.println("API key is required. Use --key <api-key>");
+            config.validate();
+        } catch (IllegalArgumentException e) {
+            System.err.println(e.getMessage());
             System.exit(1);
         }
 
         // Parse game mode
         GameMode mode;
         try {
-            mode = GameMode.valueOf(modeStr);
+            mode = GameMode.valueOf(config.getMode());
         } catch (IllegalArgumentException e) {
-            System.err.println("Invalid game mode: " + modeStr);
+            System.err.println("Invalid game mode: " + config.getMode());
             System.err.println("Valid modes: TRAINING, OPEN, RANKED");
             System.exit(1);
             return;
         }
 
-        LOGGER.info("Starting {} agent...", agentName);
-        LOGGER.info("Server: {}", serverAddr);
-        LOGGER.info("Mode: {}", modeStr);
-        LOGGER.info("Time control: {}", timeControl);
+        LOGGER.info("Starting {} agent...", config.getAgentName());
+        LOGGER.info("Server: {}", config.getServerAddress());
+        LOGGER.info("Mode: {}", config.getMode());
+        LOGGER.info("Time control: {}", config.getTimeControl());
         LOGGER.info("Protocol: gRPC");
 
         // Create agent
-        EasyAgent agent = new EasyAgent(agentName);
+        EasyAgent agent = new EasyAgent(config.getAgentName());
 
         // Create client and play game
-        AdjudicatorClient client = new AdjudicatorClient(serverAddr, apiKey, true);
+        AdjudicatorClient client = new AdjudicatorClient(config.getServerAddress(), config.getApiKey(), true);
 
         try {
-            client.playGame(agent, mode, timeControl);
+            client.playGame(agent, mode, config.getTimeControl());
             LOGGER.info("Agent finished successfully");
         } catch (Exception e) {
             LOGGER.error("Game error", e);
             System.exit(1);
         }
-    }
-
-    /**
-     * Helper method to parse command line arguments.
-     */
-    private static String getArg(String[] args, String flag, String defaultValue) {
-        for (int i = 0; i < args.length - 1; i++) {
-            if (args[i].equals(flag)) {
-                return args[i + 1];
-            }
-        }
-        return defaultValue;
     }
 }

@@ -143,6 +143,39 @@ public class Main {
 }
 ```
 
+## Running the Example Agent
+
+The SDK includes a ready-to-use agent `EasyAgent` in `ch.adjudicator.agent.EasyAgent`.
+You can run it directly using Maven.
+
+### Command Line Arguments
+
+```bash
+mvn exec:java "-Dexec.mainClass=ch.adjudicator.agent.EasyAgent" \
+  "-Dexec.args=--key <YOUR_API_KEY> --name MyBot --mode RANKED"
+```
+
+Supported arguments:
+- `--server`: Server address (default: `grpc.adjudicator.ch`)
+- `--key`: Your API Key (required if not in agent.env)
+- `--name`: Agent name (default: `EasyBot`)
+- `--mode`: Game mode: `TRAINING`, `OPEN`, `RANKED` (default: `TRAINING`)
+- `--time`: Time control, e.g., `300+0` (default: `300+0`)
+
+### Configuration via agent.env
+
+Instead of passing arguments every time, you can create a file named `agent.env` in the project root directory.
+The agent will automatically load configuration from this file.
+
+**Example `agent.env`:**
+```properties
+API_KEY=your-secret-key-here
+AGENT_NAME=MySuperBot
+SERVER=grpc.adjudicator.ch
+```
+
+*Note: Command line arguments override settings in `agent.env`.*
+
 ## API Reference
 
 ### Agent Interface
