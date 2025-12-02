@@ -42,18 +42,6 @@ mvn clean compile
 mvn package assembly:single
 ```
 
-### Adding to Your Maven Project
-
-Add the following dependency to your `pom.xml` (after building locally):
-
-```xml
-<dependency>
-    <groupId>ch.adjudicator</groupId>
-    <artifactId>adjudicator-client</artifactId>
-    <version>1.0.0</version>
-</dependency>
-```
-
 ## Protocol Buffer code generation
 
 This project uses the `protobuf-maven-plugin` to generate Java classes and gRPC stubs from the `.proto` files under `src/proto` (specifically `chess_contest.proto`).
