@@ -11,6 +11,8 @@ import org.slf4j.LoggerFactory;
 
 import java.util.*;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.LockSupport;
 
 /**
  * SmartAgent: A stronger chess agent using Iterative Deepening + Alpha-Beta + Quiescence,
@@ -21,6 +23,8 @@ import java.util.concurrent.ThreadLocalRandom;
  */
 public class SmartAgent implements Agent {
     private static final Logger LOGGER = LoggerFactory.getLogger(SmartAgent.class);
+
+    private final Random random;
 
     // Material values (centipawns)
     private static final int PAWN = 100;
@@ -65,24 +69,12 @@ public class SmartAgent implements Agent {
 
     public SmartAgent(String name) {
         this.name = name;
+        this.random = new Random();
     }
 
-    private Move computeBestMove(MoveRequest request) throws Exception{
-        try {
-            LOGGER.info("[{}] getMove called. Opponent move: '{}', Your time: {}ms",
-                    name, request.getOpponentMove(), request.getYourTimeMs());
+    private Move computeBestMove(int yourTimeMs) throws Exception{
 
-            // Apply opponent move
-            if (request.getOpponentMove() != null && !request.getOpponentMove().isEmpty()) {
-                String them = request.getOpponentMove();
-                try {
-                    Move m = parseMove(them);
-                    board.doMove(m);
-                    LOGGER.info("[{}] Applied opponent move: {}", name, them);
-                } catch (Exception ex) {
-                    LOGGER.warn("[{}] Failed to apply opponent move {}", name, them, ex);
-                }
-            }
+        try {
 
             // Opening book quick return (lazy init)
             if (OPENING_BOOK == null) {
@@ -99,7 +91,7 @@ public class SmartAgent implements Agent {
             }
 
             // Compute time budget
-            int yourTime = Math.max(0, request.getYourTimeMs());
+            int yourTime = Math.max(0, yourTimeMs);
             long budgetMs = computeTimeBudget(yourTime, incrementMs);
             if (yourTime < 5000) {
                 // Low time aggression: cap to 1-2 shallow iterations
@@ -177,9 +169,6 @@ public class SmartAgent implements Agent {
                 // Fallback: pick a legal move
                 bestMove = rootMoves.get(0);
             }
-
-            board.doMove(bestMove);
-            LOGGER.info("[{}] Playing: {} (eval {} cp, nodes {})", name, moveToLAN(bestMove), bestScore, nodes);
             return bestMove;
         } catch (Exception e) {
             LOGGER.error("[{}] CRITICAL ERROR in getMove", name, e);
@@ -196,9 +185,49 @@ public class SmartAgent implements Agent {
         }
     }
 
+    public Move computeMove(MoveRequest request) throws Exception {
+        LOGGER.info("[{}] My turn! Time remaining: {}ms", name, request.getYourTimeMs());
+
+        // Update board with opponent's move if present
+        if (!request.getOpponentMove().isEmpty()) {
+            String opponentMove = request.getOpponentMove();
+            LOGGER.info("[{}] Opponent played: {}", name, opponentMove);
+
+            try {
+                Move move = parseMove(opponentMove);
+                board.doMove(move);
+            } catch (Exception e) {
+                LOGGER.warn("[{}] Failed to parse opponent move: {}", name, opponentMove, e);
+                // If we can't parse the move, reset the board and continue
+                // This shouldn't happen in normal gameplay
+            }
+        }
+
+        // Generate all legal moves
+        List<Move> legalMoves = board.legalMoves();
+
+        if (legalMoves.isEmpty()) {
+            LOGGER.error("[{}] No legal moves available!", name);
+            throw new Exception("No legal moves available");
+        }
+
+        // Select a random legal move
+        Move selectedMove = computeBestMove(request.getYourTimeMs());
+
+        // Apply the move to our board
+        board.doMove(selectedMove);
+
+        // Convert to Long Algebraic Notation (LAN)
+        String moveStr = moveToLAN(selectedMove);
+        LOGGER.info("[{}] Playing move: {} (from {} legal moves)", name, moveStr, legalMoves.size());
+        LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(100));
+        return selectedMove;
+    }
+
     @Override
     public String getMove(MoveRequest request) throws Exception {
-        String moveToSend = moveToLAN(computeBestMove(request));
+        LOGGER.info("[{}] Received move request: {}", name, request);
+        String moveToSend = moveToLAN(computeMove(request));
         LOGGER.info("[{}] Sending move: {}", name, moveToSend);
         return moveToSend;
     }
