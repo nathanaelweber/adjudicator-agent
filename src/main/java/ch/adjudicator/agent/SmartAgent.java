@@ -67,12 +67,11 @@ public class SmartAgent implements Agent {
         this.name = name;
     }
 
-    @Override
-    public String getMove(MoveRequest request) throws Exception {
+    private Move computeBestMove(MoveRequest request) throws Exception{
         try {
-            LOGGER.info("[{}] getMove called. Opponent move: '{}', Your time: {}ms", 
+            LOGGER.info("[{}] getMove called. Opponent move: '{}', Your time: {}ms",
                     name, request.getOpponentMove(), request.getYourTimeMs());
-            
+
             // Apply opponent move
             if (request.getOpponentMove() != null && !request.getOpponentMove().isEmpty()) {
                 String them = request.getOpponentMove();
@@ -96,7 +95,7 @@ public class SmartAgent implements Agent {
                 Move m = parseMove(pick);
                 board.doMove(m);
                 LOGGER.info("[{}] Book move: {}", name, pick);
-                return pick;
+                return m;
             }
 
             // Compute time budget
@@ -180,9 +179,8 @@ public class SmartAgent implements Agent {
             }
 
             board.doMove(bestMove);
-            String lan = moveToLAN(bestMove);
-            LOGGER.info("[{}] Playing: {} (eval {} cp, nodes {})", name, lan, bestScore, nodes);
-            return lan;
+            LOGGER.info("[{}] Playing: {} (eval {} cp, nodes {})", name, moveToLAN(bestMove), bestScore, nodes);
+            return bestMove;
         } catch (Exception e) {
             LOGGER.error("[{}] CRITICAL ERROR in getMove", name, e);
             // Try to return a random legal move as last resort
@@ -190,12 +188,19 @@ public class SmartAgent implements Agent {
             if (!emergency.isEmpty()) {
                 Move fallback = emergency.get(0);
                 board.doMove(fallback);
-                String lan = moveToLAN(fallback);
-                LOGGER.warn("[{}] Emergency fallback move: {}", name, lan);
-                return lan;
+                LOGGER.warn("[{}] Emergency fallback move: {}", name, moveToLAN(fallback));
+                return fallback;
             }
+            LOGGER.error("Bad things have happened", e);
             throw e;
         }
+    }
+
+    @Override
+    public String getMove(MoveRequest request) throws Exception {
+        String moveToSend = moveToLAN(computeBestMove(request));
+        LOGGER.info("[{}] Sending move: {}", name, moveToSend);
+        return moveToSend;
     }
 
     @Override
@@ -534,17 +539,26 @@ public class SmartAgent implements Agent {
     }
 
     private Move parseMove(String lan) {
-        String lower = lan.toLowerCase(Locale.ROOT);
-        // Find among legal moves first (safe)
-        for (Move m : board.legalMoves()) {
-            if (moveToLAN(m).equals(lower)) return m;
+        // chesslib expects moves in format like "E2E4"
+        // LAN format: source square + destination square + optional promotion piece
+        String upperLan = lan.toUpperCase();
+
+        // Find the move in legal moves that matches
+        List<Move> legalMoves = board.legalMoves();
+        for (Move move : legalMoves) {
+            String moveLan = moveToLAN(move);
+            if (moveLan.equalsIgnoreCase(lan)) {
+                return move;
+            }
         }
-        // Fallback: let chesslib parse
-        return new Move(lan.toUpperCase(Locale.ROOT), board.getSideToMove());
+
+        // If not found in legal moves, try to construct it
+        // This is a fallback that shouldn't normally be needed
+        return new Move(upperLan, board.getSideToMove());
     }
 
     private String moveToLAN(Move move) {
-        return move.toString().toLowerCase(Locale.ROOT);
+        return move.toString().toLowerCase();
     }
 
     // =============== TT ==================
