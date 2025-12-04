@@ -74,18 +74,20 @@ public class SmartAgent implements Agent {
 
     private Move computeBestMove(int yourTimeMs) throws Exception{
 
+        // Clone the board to avoid modifying the original board during search
+        Board searchBoard = board.clone();
+
         try {
 
             // Opening book quick return (lazy init)
             if (OPENING_BOOK == null) {
                 OPENING_BOOK = createMiniBook();
             }
-            String fen = board.getFen();
+            String fen = searchBoard.getFen();
             String[] bookMoves = OPENING_BOOK.get(fen);
             if (bookMoves != null && bookMoves.length > 0) {
                 String pick = bookMoves[ThreadLocalRandom.current().nextInt(bookMoves.length)];
                 Move m = parseMove(pick);
-                board.doMove(m);
                 LOGGER.info("[{}] Book move: {}", name, pick);
                 return m;
             }
@@ -107,7 +109,7 @@ public class SmartAgent implements Agent {
             // Iterative deepening
             Move bestMove = null;
             int bestScore = -CHECKMATE_SCORE;
-            List<Move> rootMoves = board.legalMoves();
+            List<Move> rootMoves = searchBoard.legalMoves();
             if (rootMoves.isEmpty()) {
                 throw new Exception("No legal moves available");
             }
@@ -133,9 +135,9 @@ public class SmartAgent implements Agent {
                     Move move = rootMoves.get(i);
                     if (timeExceeded()) break;
 
-                    board.doMove(move);
-                    int score = -alphaBeta(depth - 1, -beta, -alpha, false, 1);
-                    board.undoMove();
+                    searchBoard.doMove(move);
+                    int score = -alphaBeta(depth - 1, -beta, -alpha, false, 1, searchBoard);
+                    searchBoard.undoMove();
 
                     if (score > iterationBestScore) {
                         iterationBestScore = score;
@@ -173,10 +175,9 @@ public class SmartAgent implements Agent {
         } catch (Exception e) {
             LOGGER.error("[{}] CRITICAL ERROR in getMove", name, e);
             // Try to return a random legal move as last resort
-            List<Move> emergency = board.legalMoves();
+            List<Move> emergency = searchBoard.legalMoves();
             if (!emergency.isEmpty()) {
                 Move fallback = emergency.get(0);
-                board.doMove(fallback);
                 LOGGER.warn("[{}] Emergency fallback move: {}", name, moveToLAN(fallback));
                 return fallback;
             }
@@ -260,7 +261,7 @@ public class SmartAgent implements Agent {
 
     // =============== SEARCH ==================
 
-    private int alphaBeta(int depth, int alpha, int beta, boolean maximizing, int ply) {
+    private int alphaBeta(int depth, int alpha, int beta, boolean maximizing, int ply, Board searchBoard) {
         if ((nodes++ % TIME_CHECK_EVERY_NODES) == 0 && timeExceeded()) {
             timeUp = true;
             return 0;
@@ -272,7 +273,7 @@ public class SmartAgent implements Agent {
         if (beta > mateIn) beta = mateIn;
         if (alpha >= beta) return alpha;
 
-        long key = getZKey(board);
+        long key = getZKey(searchBoard);
         TTEntry tte = tt.get(key);
         if (tte != null && tte.depth >= depth) {
             if (tte.flag == TTFlag.EXACT) return tte.score;
@@ -282,13 +283,13 @@ public class SmartAgent implements Agent {
         }
 
         if (depth == 0) {
-            return quiescence(alpha, beta, ply);
+            return quiescence(alpha, beta, ply, searchBoard);
         }
 
-        List<Move> moves = board.legalMoves();
+        List<Move> moves = searchBoard.legalMoves();
         if (moves.isEmpty()) {
             // checkmate or stalemate
-            if (isInCheck(board)) {
+            if (isInCheck(searchBoard)) {
                 return -CHECKMATE_SCORE + ply; // losing side to move is mated
             } else {
                 return 0; // stalemate
@@ -302,9 +303,9 @@ public class SmartAgent implements Agent {
 
         for (int i = 0; i < moves.size(); i++) {
             Move m = moves.get(i);
-            board.doMove(m);
-            int score = -alphaBeta(depth - 1, -beta, -alpha, !maximizing, ply + 1);
-            board.undoMove();
+            searchBoard.doMove(m);
+            int score = -alphaBeta(depth - 1, -beta, -alpha, !maximizing, ply + 1, searchBoard);
+            searchBoard.undoMove();
 
             if (timeUp) return 0;
 
@@ -338,17 +339,17 @@ public class SmartAgent implements Agent {
         return bestScore;
     }
 
-    private int quiescence(int alpha, int beta, int ply) {
+    private int quiescence(int alpha, int beta, int ply, Board searchBoard) {
         if ((nodes++ % TIME_CHECK_EVERY_NODES) == 0 && timeExceeded()) {
             timeUp = true;
             return 0;
         }
 
-        int standPat = evaluate();
+        int standPat = evaluate(searchBoard);
         if (standPat >= beta) return beta;
         if (standPat > alpha) alpha = standPat;
 
-        List<Move> moves = board.legalMoves();
+        List<Move> moves = searchBoard.legalMoves();
         // Consider only captures and promotions in QS
         List<Move> noisy = new ArrayList<>();
         for (Move m : moves) {
@@ -358,9 +359,9 @@ public class SmartAgent implements Agent {
         noisy.sort((a, b) -> Integer.compare(mvvLvaScore(b), mvvLvaScore(a)));
 
         for (Move m : noisy) {
-            board.doMove(m);
-            int score = -quiescence(-beta, -alpha, ply + 1);
-            board.undoMove();
+            searchBoard.doMove(m);
+            int score = -quiescence(-beta, -alpha, ply + 1, searchBoard);
+            searchBoard.undoMove();
             if (timeUp) return 0;
 
             if (score >= beta) return beta;
@@ -434,7 +435,7 @@ public class SmartAgent implements Agent {
 
     // =============== EVALUATION ==================
 
-    private int evaluate() {
+    private int evaluate(Board searchBoard) {
         // Perspective: score is from side to move's perspective relative to our color
         int materialWhite = 0;
         int materialBlack = 0;
@@ -445,7 +446,7 @@ public class SmartAgent implements Agent {
 
         // Material and PST
         for (Square sq : Square.values()) {
-            Piece p = board.getPiece(sq);
+            Piece p = searchBoard.getPiece(sq);
             if (p == Piece.NONE) continue;
             int pv = pieceValue(p);
             int idx = squareToIndex(sq, Side.WHITE); // 0..63 from White's POV
@@ -468,8 +469,8 @@ public class SmartAgent implements Agent {
         }
 
         // Mobility: rough count for side to move only (optimization)
-        Side stm = board.getSideToMove();
-        int sideToMoveM = board.legalMoves().size();
+        Side stm = searchBoard.getSideToMove();
+        int sideToMoveM = searchBoard.legalMoves().size();
         if (stm == Side.WHITE) {
             mobilityWhite = sideToMoveM;
         } else {
@@ -477,15 +478,15 @@ public class SmartAgent implements Agent {
         }
 
         // Game phase: based on non-pawn material
-        int nonPawnMaterial = (materialWhite - countPawns(Side.WHITE) * PAWN)
-                + (materialBlack - countPawns(Side.BLACK) * PAWN);
+        int nonPawnMaterial = (materialWhite - countPawns(Side.WHITE, searchBoard) * PAWN)
+                + (materialBlack - countPawns(Side.BLACK, searchBoard) * PAWN);
         int phase = Math.max(0, Math.min(24, nonPawnMaterial / 320)); // rough 0..24
 
         int mgScore = (materialWhite - materialBlack) + (pstWhite - pstBlack) + 2 * (mobilityWhite - mobilityBlack);
 
         // Endgame PST for king (encourage centralization)
-        int kingEgWhite = PST.KING_EG[squareToIndex(findKing(Side.WHITE), Side.WHITE)];
-        int kingEgBlack = PST.flip(PST.KING_EG, squareToIndex(findKing(Side.BLACK), Side.WHITE));
+        int kingEgWhite = PST.KING_EG[squareToIndex(findKing(Side.WHITE, searchBoard), Side.WHITE)];
+        int kingEgBlack = PST.flip(PST.KING_EG, squareToIndex(findKing(Side.BLACK, searchBoard), Side.WHITE));
         int egScore = (materialWhite - materialBlack) + (pstWhite - pstBlack) + (kingEgWhite - kingEgBlack) * 2;
 
         int score = (mgScore * phase + egScore * (24 - phase)) / 24;
@@ -495,19 +496,19 @@ public class SmartAgent implements Agent {
         return -score;
     }
 
-    private Square findKing(Side color) {
+    private Square findKing(Side color, Board searchBoard) {
         for (Square sq : Square.values()) {
-            Piece p = board.getPiece(sq);
+            Piece p = searchBoard.getPiece(sq);
             if (color == Side.WHITE && p == Piece.WHITE_KING) return sq;
             if (color == Side.BLACK && p == Piece.BLACK_KING) return sq;
         }
         return Square.NONE;
     }
 
-    private int countPawns(Side color) {
+    private int countPawns(Side color, Board searchBoard) {
         int c = 0;
         for (Square sq : Square.values()) {
-            Piece p = board.getPiece(sq);
+            Piece p = searchBoard.getPiece(sq);
             if (color == Side.WHITE && p == Piece.WHITE_PAWN) c++;
             if (color == Side.BLACK && p == Piece.BLACK_PAWN) c++;
         }
