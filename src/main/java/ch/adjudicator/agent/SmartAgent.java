@@ -96,7 +96,7 @@ public class SmartAgent implements Agent {
             LOGGER.info("[{}] Sending move: {}", name, moveToSend);
             return moveToSend;
         } catch (Throwable e) {
-            return "a1a2";
+            return "a1a5";
         }
     }
 

@@ -28,6 +28,7 @@ public class BestMoveCalculator {
     private static final int TABLE_SIZE_MB = 128; // TT size hint (not strictly enforced with HashMap)
     private static final int TIME_CHECK_EVERY_NODES = 10_000;
     private static final int MAX_DEPTH = 64; // theoretical upper bound
+    private static final int MAX_QUIESCENCE_DEPTH = 20; // limit quiescence search depth to prevent stack overflow
 
 
     // Game control
@@ -350,6 +351,11 @@ public class BestMoveCalculator {
         if ((nodes++ % TIME_CHECK_EVERY_NODES) == 0 && timeExceeded()) {
             timeUp = true;
             return 0;
+        }
+
+        // Prevent stack overflow by limiting quiescence depth
+        if (ply >= MAX_QUIESCENCE_DEPTH) {
+            return evaluate(searchBoard);
         }
 
         int standPat = evaluate(searchBoard);
