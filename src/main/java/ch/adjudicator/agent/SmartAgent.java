@@ -28,11 +28,13 @@ public class SmartAgent implements Agent {
     // Board state
     private final String name;
     private Board board = new Board();
+    private final Random random;
 
     BestMoveCalculator bestMoveCalculator = new BestMoveCalculator();
 
     public SmartAgent(String name) {
         this.name = name;
+        this.random = new Random();
     }
 
 
@@ -48,7 +50,7 @@ public class SmartAgent implements Agent {
             try {
                 Move move = parseMove(opponentMove);
                 board.doMove(move);
-            } catch (Exception e) {
+            } catch (Throwable e) {
                 LOGGER.warn("[{}] Failed to parse opponent move: {}", name, opponentMove, e);
                 // If we can't parse the move, reset the board and continue
                 // This shouldn't happen in normal gameplay
@@ -64,7 +66,18 @@ public class SmartAgent implements Agent {
         }
 
         // Select a random legal move
-        Move selectedMove = bestMoveCalculator.computeBestMove(board, request.getYourTimeMs());
+        Move selectedMove = null;
+        try {
+            selectedMove = bestMoveCalculator.computeBestMove(board, request.getYourTimeMs());
+        } catch (Throwable e) {
+            LOGGER.warn("[{}] Error while computing best move: {}", name, e.getMessage(), e);
+            selectedMove = legalMoves.get(random.nextInt(legalMoves.size()));
+        }
+
+        if(!legalMoves.contains(selectedMove)) {
+            LOGGER.warn("[{}] Detected illegal computedMoveBy bestMoveCalculator (us): {}", name, selectedMove.toString());
+            selectedMove = legalMoves.get(random.nextInt(legalMoves.size()));
+        }
 
         // Apply the move to our board
         board.doMove(selectedMove);
@@ -72,16 +85,19 @@ public class SmartAgent implements Agent {
         // Convert to Long Algebraic Notation (LAN)
         String moveStr = moveToLAN(selectedMove);
         LOGGER.info("[{}] Playing move: {} (from {} legal moves)", name, moveStr, legalMoves.size());
-        LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(100));
         return selectedMove;
     }
 
     @Override
     public String getMove(MoveRequest request) throws Exception {
-        LOGGER.info("[{}] Received move request: {}", name, request);
-        String moveToSend = moveToLAN(computeMove(request));
-        LOGGER.info("[{}] Sending move: {}", name, moveToSend);
-        return moveToSend;
+        try {
+            LOGGER.info("[{}] Received move request: {}", name, request);
+            String moveToSend = moveToLAN(computeMove(request));
+            LOGGER.info("[{}] Sending move: {}", name, moveToSend);
+            return moveToSend;
+        } catch (Throwable e) {
+            return "a1a2";
+        }
     }
 
     @Override
@@ -105,26 +121,17 @@ public class SmartAgent implements Agent {
         LOGGER.error("[{}] Error: {}", name, message);
     }
 
-
-    private int packMove(Move m) {
-        int from = m.getFrom().ordinal();
-        int to = m.getTo().ordinal();
-        int promo = 0;
-        if (m.getPromotion() != null) promo = m.getPromotion().ordinal() & 0xFF;
-        return (from) | (to << 8) | (promo << 16);
-    }
-
+    /**
+     * Parse a move in Long Algebraic Notation (LAN) format.
+     * Examples: "e2e4", "e7e8q" (promotion)
+     */
     private Move parseMove(String lan) {
-        return parseMove(lan, board);
-    }
-
-    private Move parseMove(String lan, Board boardToUse) {
         // chesslib expects moves in format like "E2E4"
         // LAN format: source square + destination square + optional promotion piece
         String upperLan = lan.toUpperCase();
 
         // Find the move in legal moves that matches
-        List<Move> legalMoves = boardToUse.legalMoves();
+        List<Move> legalMoves = board.legalMoves();
         for (Move move : legalMoves) {
             String moveLan = moveToLAN(move);
             if (moveLan.equalsIgnoreCase(lan)) {
@@ -134,7 +141,7 @@ public class SmartAgent implements Agent {
 
         // If not found in legal moves, try to construct it
         // This is a fallback that shouldn't normally be needed
-        return new Move(upperLan, boardToUse.getSideToMove());
+        return new Move(upperLan, board.getSideToMove());
     }
 
     private String moveToLAN(Move move) {

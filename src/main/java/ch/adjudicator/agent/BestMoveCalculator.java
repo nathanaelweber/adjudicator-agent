@@ -52,25 +52,8 @@ public class BestMoveCalculator {
     // Transposition Table
     private final Map<Long, TTEntry> tt = new HashMap<>(TABLE_SIZE_MB * 1024);
 
-    // Opening book (tiny) - lazy initialized to avoid static initialization issues
-    private static Map<String, String[]> OPENING_BOOK = null;
-
-
     public Move computeBestMove(Board searchBoard, int yourTimeMs) throws Exception{
         try {
-            // Opening book quick return (lazy init)
-            if (OPENING_BOOK == null) {
-                OPENING_BOOK = createMiniBook();
-            }
-            String fen = searchBoard.getFen();
-            String[] bookMoves = OPENING_BOOK.get(fen);
-            if (bookMoves != null && bookMoves.length > 0) {
-                String pick = bookMoves[ThreadLocalRandom.current().nextInt(bookMoves.length)];
-                Move m = parseMove(pick, searchBoard);
-                LOGGER.info("[{}] Book move: {}", name, pick);
-                return m;
-            }
-
             // Compute time budget
             int yourTime = Math.max(0, yourTimeMs);
             long budgetMs = computeTimeBudget(yourTime, incrementMs);
@@ -151,7 +134,7 @@ public class BestMoveCalculator {
                 bestMove = rootMoves.get(0);
             }
             return bestMove;
-        } catch (Exception e) {
+        } catch (Throwable e) {
             LOGGER.error("[{}] CRITICAL ERROR in computeBestMove", name, e);
             // Try to return a random legal move as last resort
             List<Move> emergency = searchBoard.legalMoves();
@@ -494,7 +477,8 @@ public class BestMoveCalculator {
 
         // Mobility: rough count for side to move only (optimization)
         Side stm = searchBoard.getSideToMove();
-        int sideToMoveM = searchBoard.legalMoves().size();
+        var legalMoves = searchBoard.legalMoves();
+        int sideToMoveM = legalMoves == null ? 0 : legalMoves.size();
         if (stm == Side.WHITE) {
             mobilityWhite = sideToMoveM;
         } else {
