@@ -34,6 +34,7 @@ public class BestMoveCalculator {
     private int incrementMs = 0;
     private int initialTimeMs = 0;
     private Side myColor = Side.WHITE;
+    private String name = "BestMoveCalculator";
 
     // Time management per move
     private long moveSearchDeadline = Long.MAX_VALUE;
@@ -49,7 +50,7 @@ public class BestMoveCalculator {
     private final Map<Integer, Integer> historyHeuristic = new HashMap<>();
 
     // Transposition Table
-    private final Map<Long, SmartAgent.TTEntry> tt = new HashMap<>(TABLE_SIZE_MB * 1024);
+    private final Map<Long, TTEntry> tt = new HashMap<>(TABLE_SIZE_MB * 1024);
 
     // Opening book (tiny) - lazy initialized to avoid static initialization issues
     private static Map<String, String[]> OPENING_BOOK = null;
@@ -93,7 +94,7 @@ public class BestMoveCalculator {
             }
 
             // Order root moves crudely by MVV/LVA for first iteration
-            orderMoves(rootMoves, null, 0);
+            orderMoves(rootMoves, null, 0, searchBoard);
 
             for (int depth = 1; depth <= MAX_DEPTH; depth++) {
                 if (timeExceeded()) break;
@@ -153,8 +154,7 @@ public class BestMoveCalculator {
         } catch (Exception e) {
             LOGGER.error("[{}] CRITICAL ERROR in computeBestMove", name, e);
             // Try to return a random legal move as last resort
-            Board fallbackBoard = (searchBoard != null) ? searchBoard : board;
-            List<Move> emergency = fallbackBoard.legalMoves();
+            List<Move> emergency = searchBoard.legalMoves();
             if (!emergency.isEmpty()) {
                 Move fallback = emergency.get(0);
                 LOGGER.warn("[{}] Emergency fallback move: {}", name, moveToLAN(fallback));
@@ -320,7 +320,7 @@ public class BestMoveCalculator {
             }
         }
 
-        orderMoves(moves, tte != null ? tte.bestMove : null, ply);
+        orderMoves(moves, tte != null ? tte.bestMove : null, ply, searchBoard);
 
         int bestScore = -CHECKMATE_SCORE;
         Move best = null;
@@ -339,12 +339,12 @@ public class BestMoveCalculator {
                 if (score > alpha) {
                     alpha = score;
                     // History heuristic boost for quiet moves
-                    if (!isCapture(m)) addHistory(m, depth);
+                    if (!isCapture(m, searchBoard)) addHistory(m, depth);
                 }
             }
 
             if (alpha >= beta) {
-                storeKiller(m, ply);
+                storeKiller(m, ply, searchBoard);
                 break; // beta cutoff
             }
         }
@@ -377,10 +377,10 @@ public class BestMoveCalculator {
         // Consider only captures and promotions in QS
         List<Move> noisy = new ArrayList<>();
         for (Move m : moves) {
-            if (isCapture(m) || isPromotion(m)) noisy.add(m);
+            if (isCapture(m, searchBoard) || isPromotion(m)) noisy.add(m);
         }
         // Order captures by MVV/LVA
-        noisy.sort((a, b) -> Integer.compare(mvvLvaScore(b), mvvLvaScore(a)));
+        noisy.sort((a, b) -> Integer.compare(mvvLvaScore(b, searchBoard), mvvLvaScore(a, searchBoard)));
 
         for (Move m : noisy) {
             searchBoard.doMove(m);
@@ -396,17 +396,17 @@ public class BestMoveCalculator {
 
     // =============== ORDERING & HEURISTICS ==================
 
-    private void orderMoves(List<Move> moves, Move pv, int ply) {
+    private void orderMoves(List<Move> moves, Move pv, int ply, Board searchBoard) {
         // PV first
         if (pv != null && moves.remove(pv)) moves.add(0, pv);
 
         // Simple scoring for ordering
-        moves.sort((a, b) -> Integer.compare(scoreForOrdering(b, ply), scoreForOrdering(a, ply)));
+        moves.sort((a, b) -> Integer.compare(scoreForOrdering(b, ply, searchBoard), scoreForOrdering(a, ply, searchBoard)));
     }
 
-    private int scoreForOrdering(Move m, int ply) {
+    private int scoreForOrdering(Move m, int ply, Board searchBoard) {
         int score = 0;
-        if (isCapture(m)) score += 10_000 + mvvLvaScore(m);
+        if (isCapture(m, searchBoard)) score += 10_000 + mvvLvaScore(m, searchBoard);
         if (isPromotion(m)) score += 8_000;
         // killer moves
         Move k1 = killerMovesSafe(ply, 0);
@@ -414,12 +414,12 @@ public class BestMoveCalculator {
         if (m.equals(k1)) score += 5_000;
         else if (m.equals(k2)) score += 4_000;
         // history heuristic (quiet moves only)
-        if (!isCapture(m)) score += historyHeuristic.getOrDefault(packMove(m), 0);
+        if (!isCapture(m, searchBoard)) score += historyHeuristic.getOrDefault(packMove(m), 0);
         return score;
     }
 
-    private void storeKiller(Move m, int ply) {
-        if (isCapture(m)) return; // only quiet moves are killers
+    private void storeKiller(Move m, int ply, Board searchBoard) {
+        if (isCapture(m, searchBoard)) return; // only quiet moves are killers
         Move k1 = killerMoves[ply][0];
         if (!m.equals(k1)) {
             killerMoves[ply][1] = killerMoves[ply][0];
@@ -437,14 +437,14 @@ public class BestMoveCalculator {
         historyHeuristic.put(key, historyHeuristic.getOrDefault(key, 0) + depth * depth);
     }
 
-    private int mvvLvaScore(Move m) {
-        Piece victim = board.getPiece(m.getTo());
-        Piece attacker = board.getPiece(m.getFrom());
+    private int mvvLvaScore(Move m, Board searchBoard) {
+        Piece victim = searchBoard.getPiece(m.getTo());
+        Piece attacker = searchBoard.getPiece(m.getFrom());
         return 10 * pieceValue(victim) - pieceValue(attacker);
     }
 
-    private boolean isCapture(Move m) {
-        Piece victim = board.getPiece(m.getTo());
+    private boolean isCapture(Move m, Board searchBoard) {
+        Piece victim = searchBoard.getPiece(m.getTo());
         return victim != Piece.NONE;
     }
 
@@ -595,5 +595,36 @@ public class BestMoveCalculator {
         Arrays.stream(killerMoves).forEach(arr -> Arrays.fill(arr, null));
         historyHeuristic.clear();
         tt.clear();
+    }
+
+    private int packMove(Move m) {
+        int from = m.getFrom().ordinal();
+        int to = m.getTo().ordinal();
+        int promo = 0;
+        if (m.getPromotion() != null) promo = m.getPromotion().ordinal() & 0xFF;
+        return (from) | (to << 8) | (promo << 16);
+    }
+
+    private Move parseMove(String lan, Board boardToUse) {
+        // chesslib expects moves in format like "E2E4"
+        // LAN format: source square + destination square + optional promotion piece
+        String upperLan = lan.toUpperCase();
+
+        // Find the move in legal moves that matches
+        List<Move> legalMoves = boardToUse.legalMoves();
+        for (Move move : legalMoves) {
+            String moveLan = moveToLAN(move);
+            if (moveLan.equalsIgnoreCase(lan)) {
+                return move;
+            }
+        }
+
+        // If not found in legal moves, try to construct it
+        // This is a fallback that shouldn't normally be needed
+        return new Move(upperLan, boardToUse.getSideToMove());
+    }
+
+    private String moveToLAN(Move move) {
+        return move.toString().toLowerCase();
     }
 }
