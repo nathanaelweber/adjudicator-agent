@@ -1,0 +1,696 @@
+package ch.adjudicator.agent;
+
+import ch.adjudicator.client.*;
+import com.github.bhlangonijr.chesslib.Board;
+import com.github.bhlangonijr.chesslib.Side;
+import com.github.bhlangonijr.chesslib.Piece;
+import com.github.bhlangonijr.chesslib.Square;
+import com.github.bhlangonijr.chesslib.move.Move;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.*;
+import java.util.concurrent.ThreadLocalRandom;
+
+/**
+ * SmartAgent: A stronger chess agent using Iterative Deepening + Alpha-Beta + Quiescence,
+ * with a Transposition Table, basic Move Ordering (PV, MVV/LVA, killers, history),
+ * and a reasonably rich static evaluation with PSTs and simple phase-aware scoring.
+ *
+ * This class is self-contained and does not change any other parts of the SDK.
+ */
+public class SmartAgent implements Agent {
+    private static final Logger LOGGER = LoggerFactory.getLogger(SmartAgent.class);
+
+    // Material values (centipawns)
+    private static final int PAWN = 100;
+    private static final int KNIGHT = 320;
+    private static final int BISHOP = 330;
+    private static final int ROOK = 500;
+    private static final int QUEEN = 900;
+
+    // Search limits and controls
+    private static final int CHECKMATE_SCORE = 100_000; // large score for mates
+    private static final int TABLE_SIZE_MB = 128; // TT size hint (not strictly enforced with HashMap)
+    private static final int TIME_CHECK_EVERY_NODES = 10_000;
+    private static final int MAX_DEPTH = 64; // theoretical upper bound
+
+    // Board state
+    private final String name;
+    private Board board = new Board();
+
+    // Game control
+    private int incrementMs = 0;
+    private int initialTimeMs = 0;
+    private Side myColor = Side.WHITE;
+
+    // Time management per move
+    private long moveSearchDeadline = Long.MAX_VALUE;
+    private volatile boolean timeUp = false;
+
+    // Search state
+    private long nodes;
+
+    // Killer moves: store two killer moves per depth
+    private final Move[][] killerMoves = new Move[128][2];
+
+    // History heuristic: simple map key -> score
+    private final Map<Integer, Integer> historyHeuristic = new HashMap<>();
+
+    // Transposition Table
+    private final Map<Long, TTEntry> tt = new HashMap<>(TABLE_SIZE_MB * 1024);
+
+    // Opening book (tiny) - lazy initialized to avoid static initialization issues
+    private static Map<String, String[]> OPENING_BOOK = null;
+
+    public SmartAgent(String name) {
+        this.name = name;
+    }
+
+    @Override
+    public String getMove(MoveRequest request) throws Exception {
+        try {
+            LOGGER.info("[{}] getMove called. Opponent move: '{}', Your time: {}ms", 
+                    name, request.getOpponentMove(), request.getYourTimeMs());
+            
+            // Apply opponent move
+            if (request.getOpponentMove() != null && !request.getOpponentMove().isEmpty()) {
+                String them = request.getOpponentMove();
+                try {
+                    Move m = parseMove(them);
+                    board.doMove(m);
+                    LOGGER.info("[{}] Applied opponent move: {}", name, them);
+                } catch (Exception ex) {
+                    LOGGER.warn("[{}] Failed to apply opponent move {}", name, them, ex);
+                }
+            }
+
+            // Opening book quick return (lazy init)
+            if (OPENING_BOOK == null) {
+                OPENING_BOOK = createMiniBook();
+            }
+            String fen = board.getFen();
+            String[] bookMoves = OPENING_BOOK.get(fen);
+            if (bookMoves != null && bookMoves.length > 0) {
+                String pick = bookMoves[ThreadLocalRandom.current().nextInt(bookMoves.length)];
+                Move m = parseMove(pick);
+                board.doMove(m);
+                LOGGER.info("[{}] Book move: {}", name, pick);
+                return pick;
+            }
+
+            // Compute time budget
+            int yourTime = Math.max(0, request.getYourTimeMs());
+            long budgetMs = computeTimeBudget(yourTime, incrementMs);
+            if (yourTime < 5000) {
+                // Low time aggression: cap to 1-2 shallow iterations
+                budgetMs = Math.min(budgetMs, 150L);
+            }
+            long startTime = System.currentTimeMillis();
+            moveSearchDeadline = startTime + budgetMs;
+            timeUp = false;
+            nodes = 0;
+
+            LOGGER.info("[{}] Starting search with budget {}ms", name, budgetMs);
+
+            // Iterative deepening
+            Move bestMove = null;
+            int bestScore = -CHECKMATE_SCORE;
+            List<Move> rootMoves = board.legalMoves();
+            if (rootMoves.isEmpty()) {
+                throw new Exception("No legal moves available");
+            }
+
+            // Order root moves crudely by MVV/LVA for first iteration
+            orderMoves(rootMoves, null, 0);
+
+            for (int depth = 1; depth <= MAX_DEPTH; depth++) {
+                if (timeExceeded()) break;
+
+                int alpha = -CHECKMATE_SCORE;
+                int beta = CHECKMATE_SCORE;
+
+                Move localBest = bestMove; // PV from previous depth
+                if (localBest != null && rootMoves.remove(localBest)) {
+                    rootMoves.add(0, localBest);
+                }
+
+                int iterationBestScore = -CHECKMATE_SCORE;
+                Move iterationBestMove = localBest;
+
+                for (int i = 0; i < rootMoves.size(); i++) {
+                    Move move = rootMoves.get(i);
+                    if (timeExceeded()) break;
+
+                    board.doMove(move);
+                    int score = -alphaBeta(depth - 1, -beta, -alpha, false, 1);
+                    board.undoMove();
+
+                    if (score > iterationBestScore) {
+                        iterationBestScore = score;
+                        iterationBestMove = move;
+                    }
+                    if (score > alpha) {
+                        alpha = score;
+                    }
+                }
+
+                if (!timeUp && iterationBestMove != null) {
+                    bestMove = iterationBestMove;
+                    bestScore = iterationBestScore;
+                    // Move ordering for next iteration: put PV first
+                    rootMoves.remove(bestMove);
+                    rootMoves.add(0, bestMove);
+                    LOGGER.info("[{}] Depth {} completed. Best {} score {}. Nodes {}. Elapsed {}ms",
+                            name, depth, moveToLAN(bestMove), bestScore, nodes,
+                            (System.currentTimeMillis() - startTime));
+                } else {
+                    break; // ran out of time during this iteration
+                }
+
+                // Optional safety stop if win clearly secured and time is low
+                if (System.currentTimeMillis() - startTime > budgetMs * 0.8 && depth >= 3) {
+                    break;
+                }
+            }
+
+            if (bestMove == null) {
+                // Fallback: pick a legal move
+                bestMove = rootMoves.get(0);
+            }
+
+            board.doMove(bestMove);
+            String lan = moveToLAN(bestMove);
+            LOGGER.info("[{}] Playing: {} (eval {} cp, nodes {})", name, lan, bestScore, nodes);
+            return lan;
+        } catch (Exception e) {
+            LOGGER.error("[{}] CRITICAL ERROR in getMove", name, e);
+            // Try to return a random legal move as last resort
+            List<Move> emergency = board.legalMoves();
+            if (!emergency.isEmpty()) {
+                Move fallback = emergency.get(0);
+                board.doMove(fallback);
+                String lan = moveToLAN(fallback);
+                LOGGER.warn("[{}] Emergency fallback move: {}", name, lan);
+                return lan;
+            }
+            throw e;
+        }
+    }
+
+    @Override
+    public void onGameStart(GameInfo info) {
+        LOGGER.info("[{}] Game start: {} {}ms + {}ms", name, info.getGameId(), info.getInitialTimeMs(), info.getIncrementMs());
+        this.board = new Board();
+        this.initialTimeMs = info.getInitialTimeMs();
+        this.incrementMs = info.getIncrementMs();
+        this.myColor = (info.getColor() == Color.WHITE) ? Side.WHITE : Side.BLACK;
+        // Clear search helpers
+        Arrays.stream(killerMoves).forEach(arr -> Arrays.fill(arr, null));
+        historyHeuristic.clear();
+        tt.clear();
+    }
+
+    @Override
+    public void onGameOver(GameOverInfo info) {
+        LOGGER.info("[{}] Game over: {} ({})", name, info.getResult(), info.getReason());
+        if (info.getFinalPgn() != null && !info.getFinalPgn().isEmpty()) {
+            LOGGER.info("[{}] PGN:\n{}", name, info.getFinalPgn());
+        }
+    }
+
+    @Override
+    public void onError(String message) {
+        LOGGER.error("[{}] Error: {}", name, message);
+    }
+
+    // =============== SEARCH ==================
+
+    private int alphaBeta(int depth, int alpha, int beta, boolean maximizing, int ply) {
+        if ((nodes++ % TIME_CHECK_EVERY_NODES) == 0 && timeExceeded()) {
+            timeUp = true;
+            return 0;
+        }
+
+        // Mate distance pruning bounds (optional)
+        int mateIn = CHECKMATE_SCORE - ply;
+        if (alpha < -mateIn) alpha = -mateIn;
+        if (beta > mateIn) beta = mateIn;
+        if (alpha >= beta) return alpha;
+
+        long key = getZKey(board);
+        TTEntry tte = tt.get(key);
+        if (tte != null && tte.depth >= depth) {
+            if (tte.flag == TTFlag.EXACT) return tte.score;
+            if (tte.flag == TTFlag.LOWERBOUND && tte.score > alpha) alpha = tte.score;
+            else if (tte.flag == TTFlag.UPPERBOUND && tte.score < beta) beta = tte.score;
+            if (alpha >= beta) return tte.score;
+        }
+
+        if (depth == 0) {
+            return quiescence(alpha, beta, ply);
+        }
+
+        List<Move> moves = board.legalMoves();
+        if (moves.isEmpty()) {
+            // checkmate or stalemate
+            if (isInCheck(board)) {
+                return -CHECKMATE_SCORE + ply; // losing side to move is mated
+            } else {
+                return 0; // stalemate
+            }
+        }
+
+        orderMoves(moves, tte != null ? tte.bestMove : null, ply);
+
+        int bestScore = -CHECKMATE_SCORE;
+        Move best = null;
+
+        for (int i = 0; i < moves.size(); i++) {
+            Move m = moves.get(i);
+            board.doMove(m);
+            int score = -alphaBeta(depth - 1, -beta, -alpha, !maximizing, ply + 1);
+            board.undoMove();
+
+            if (timeUp) return 0;
+
+            if (score > bestScore) {
+                bestScore = score;
+                best = m;
+                if (score > alpha) {
+                    alpha = score;
+                    // History heuristic boost for quiet moves
+                    if (!isCapture(m)) addHistory(m, depth);
+                }
+            }
+
+            if (alpha >= beta) {
+                storeKiller(m, ply);
+                break; // beta cutoff
+            }
+        }
+
+        // Store in TT
+        TTFlag flag;
+        if (bestScore <= alpha) {
+            flag = TTFlag.UPPERBOUND;
+        } else if (bestScore >= beta) {
+            flag = TTFlag.LOWERBOUND;
+        } else {
+            flag = TTFlag.EXACT;
+        }
+        tt.put(key, new TTEntry(depth, bestScore, flag, best));
+
+        return bestScore;
+    }
+
+    private int quiescence(int alpha, int beta, int ply) {
+        if ((nodes++ % TIME_CHECK_EVERY_NODES) == 0 && timeExceeded()) {
+            timeUp = true;
+            return 0;
+        }
+
+        int standPat = evaluate();
+        if (standPat >= beta) return beta;
+        if (standPat > alpha) alpha = standPat;
+
+        List<Move> moves = board.legalMoves();
+        // Consider only captures and promotions in QS
+        List<Move> noisy = new ArrayList<>();
+        for (Move m : moves) {
+            if (isCapture(m) || isPromotion(m)) noisy.add(m);
+        }
+        // Order captures by MVV/LVA
+        noisy.sort((a, b) -> Integer.compare(mvvLvaScore(b), mvvLvaScore(a)));
+
+        for (Move m : noisy) {
+            board.doMove(m);
+            int score = -quiescence(-beta, -alpha, ply + 1);
+            board.undoMove();
+            if (timeUp) return 0;
+
+            if (score >= beta) return beta;
+            if (score > alpha) alpha = score;
+        }
+        return alpha;
+    }
+
+    // =============== ORDERING & HEURISTICS ==================
+
+    private void orderMoves(List<Move> moves, Move pv, int ply) {
+        // PV first
+        if (pv != null && moves.remove(pv)) moves.add(0, pv);
+
+        // Simple scoring for ordering
+        moves.sort((a, b) -> Integer.compare(scoreForOrdering(b, ply), scoreForOrdering(a, ply)));
+    }
+
+    private int scoreForOrdering(Move m, int ply) {
+        int score = 0;
+        if (isCapture(m)) score += 10_000 + mvvLvaScore(m);
+        if (isPromotion(m)) score += 8_000;
+        // killer moves
+        Move k1 = killerMovesSafe(ply, 0);
+        Move k2 = killerMovesSafe(ply, 1);
+        if (m.equals(k1)) score += 5_000;
+        else if (m.equals(k2)) score += 4_000;
+        // history heuristic (quiet moves only)
+        if (!isCapture(m)) score += historyHeuristic.getOrDefault(packMove(m), 0);
+        return score;
+    }
+
+    private void storeKiller(Move m, int ply) {
+        if (isCapture(m)) return; // only quiet moves are killers
+        Move k1 = killerMoves[ply][0];
+        if (!m.equals(k1)) {
+            killerMoves[ply][1] = killerMoves[ply][0];
+            killerMoves[ply][0] = m;
+        }
+    }
+
+    private Move killerMovesSafe(int ply, int idx) {
+        if (ply < 0 || ply >= killerMoves.length) return null;
+        return killerMoves[ply][idx];
+    }
+
+    private void addHistory(Move m, int depth) {
+        int key = packMove(m);
+        historyHeuristic.put(key, historyHeuristic.getOrDefault(key, 0) + depth * depth);
+    }
+
+    private int mvvLvaScore(Move m) {
+        Piece victim = board.getPiece(m.getTo());
+        Piece attacker = board.getPiece(m.getFrom());
+        return 10 * pieceValue(victim) - pieceValue(attacker);
+    }
+
+    private boolean isCapture(Move m) {
+        Piece victim = board.getPiece(m.getTo());
+        return victim != Piece.NONE;
+    }
+
+    private boolean isPromotion(Move m) {
+        return m.getPromotion() != null;
+    }
+
+    private boolean isInCheck(Board b) {
+        // Side to move is the side to be checked
+        return b.isKingAttacked();
+    }
+
+    // =============== EVALUATION ==================
+
+    private int evaluate() {
+        // Perspective: score is from side to move's perspective relative to our color
+        int materialWhite = 0;
+        int materialBlack = 0;
+        int pstWhite = 0;
+        int pstBlack = 0;
+        int mobilityWhite = 0;
+        int mobilityBlack = 0;
+
+        // Material and PST
+        for (Square sq : Square.values()) {
+            Piece p = board.getPiece(sq);
+            if (p == Piece.NONE) continue;
+            int pv = pieceValue(p);
+            int idx = squareToIndex(sq, Side.WHITE); // 0..63 from White's POV
+            switch (p) {
+                case WHITE_PAWN -> { materialWhite += pv; pstWhite += PST.PAWN_MG[idx]; }
+                case WHITE_KNIGHT -> { materialWhite += pv; pstWhite += PST.KNIGHT_MG[idx]; }
+                case WHITE_BISHOP -> { materialWhite += pv; pstWhite += PST.BISHOP_MG[idx]; }
+                case WHITE_ROOK -> { materialWhite += pv; pstWhite += PST.ROOK_MG[idx]; }
+                case WHITE_QUEEN -> { materialWhite += QUEEN; pstWhite += PST.QUEEN_MG[idx]; }
+                case WHITE_KING -> { pstWhite += PST.KING_MG[idx]; }
+
+                case BLACK_PAWN -> { materialBlack += PAWN; pstBlack += PST.flip(PST.PAWN_MG, idx); }
+                case BLACK_KNIGHT -> { materialBlack += KNIGHT; pstBlack += PST.flip(PST.KNIGHT_MG, idx); }
+                case BLACK_BISHOP -> { materialBlack += BISHOP; pstBlack += PST.flip(PST.BISHOP_MG, idx); }
+                case BLACK_ROOK -> { materialBlack += ROOK; pstBlack += PST.flip(PST.ROOK_MG, idx); }
+                case BLACK_QUEEN -> { materialBlack += QUEEN; pstBlack += PST.flip(PST.QUEEN_MG, idx); }
+                case BLACK_KING -> { pstBlack += PST.flip(PST.KING_MG, idx); }
+                default -> {}
+            }
+        }
+
+        // Mobility: rough count for side to move only (optimization)
+        Side stm = board.getSideToMove();
+        int sideToMoveM = board.legalMoves().size();
+        if (stm == Side.WHITE) {
+            mobilityWhite = sideToMoveM;
+        } else {
+            mobilityBlack = sideToMoveM;
+        }
+
+        // Game phase: based on non-pawn material
+        int nonPawnMaterial = (materialWhite - countPawns(Side.WHITE) * PAWN)
+                + (materialBlack - countPawns(Side.BLACK) * PAWN);
+        int phase = Math.max(0, Math.min(24, nonPawnMaterial / 320)); // rough 0..24
+
+        int mgScore = (materialWhite - materialBlack) + (pstWhite - pstBlack) + 2 * (mobilityWhite - mobilityBlack);
+
+        // Endgame PST for king (encourage centralization)
+        int kingEgWhite = PST.KING_EG[squareToIndex(findKing(Side.WHITE), Side.WHITE)];
+        int kingEgBlack = PST.flip(PST.KING_EG, squareToIndex(findKing(Side.BLACK), Side.WHITE));
+        int egScore = (materialWhite - materialBlack) + (pstWhite - pstBlack) + (kingEgWhite - kingEgBlack) * 2;
+
+        int score = (mgScore * phase + egScore * (24 - phase)) / 24;
+
+        // Return from our perspective
+        if (myColor == Side.WHITE) return score;
+        return -score;
+    }
+
+    private Square findKing(Side color) {
+        for (Square sq : Square.values()) {
+            Piece p = board.getPiece(sq);
+            if (color == Side.WHITE && p == Piece.WHITE_KING) return sq;
+            if (color == Side.BLACK && p == Piece.BLACK_KING) return sq;
+        }
+        return Square.NONE;
+    }
+
+    private int countPawns(Side color) {
+        int c = 0;
+        for (Square sq : Square.values()) {
+            Piece p = board.getPiece(sq);
+            if (color == Side.WHITE && p == Piece.WHITE_PAWN) c++;
+            if (color == Side.BLACK && p == Piece.BLACK_PAWN) c++;
+        }
+        return c;
+    }
+
+    private int squareToIndex(Square sq, Side pov) {
+        if (sq == Square.NONE || sq == null) {
+            return 0; // Safe fallback
+        }
+        int file = sq.getFile().ordinal(); // 0..7
+        int rank = sq.getRank().ordinal(); // 0..7 (A1 -> rank 0)
+        if (pov == Side.WHITE) {
+            return rank * 8 + file;
+        } else {
+            return (7 - rank) * 8 + (7 - file);
+        }
+    }
+
+    private int pieceValue(Piece p) {
+        return switch (p) {
+            case WHITE_PAWN, BLACK_PAWN -> PAWN;
+            case WHITE_KNIGHT, BLACK_KNIGHT -> KNIGHT;
+            case WHITE_BISHOP, BLACK_BISHOP -> BISHOP;
+            case WHITE_ROOK, BLACK_ROOK -> ROOK;
+            case WHITE_QUEEN, BLACK_QUEEN -> QUEEN;
+            default -> 0;
+        };
+    }
+
+    // =============== UTIL ==================
+
+    private boolean timeExceeded() {
+        return System.currentTimeMillis() >= moveSearchDeadline;
+    }
+
+    private static long computeTimeBudget(int remainingMs, int incMs) {
+        long budget = remainingMs / 40L + 3L * incMs;
+        return Math.max(50L, Math.min(budget, Math.max(100L, remainingMs / 2L)));
+    }
+
+    private long getZKey(Board b) {
+        try {
+            // chesslib exposes a Zobrist key on Board in recent versions
+            return b.getZobristKey();
+        } catch (Throwable t) {
+            // Fallback to FEN hash if method not available
+            return (long) b.getFen().hashCode();
+        }
+    }
+
+    private int packMove(Move m) {
+        int from = m.getFrom().ordinal();
+        int to = m.getTo().ordinal();
+        int promo = 0;
+        if (m.getPromotion() != null) promo = m.getPromotion().ordinal() & 0xFF;
+        return (from) | (to << 8) | (promo << 16);
+    }
+
+    private Move parseMove(String lan) {
+        String lower = lan.toLowerCase(Locale.ROOT);
+        // Find among legal moves first (safe)
+        for (Move m : board.legalMoves()) {
+            if (moveToLAN(m).equals(lower)) return m;
+        }
+        // Fallback: let chesslib parse
+        return new Move(lan.toUpperCase(Locale.ROOT), board.getSideToMove());
+    }
+
+    private String moveToLAN(Move move) {
+        return move.toString().toLowerCase(Locale.ROOT);
+    }
+
+    // =============== TT ==================
+
+    private enum TTFlag { EXACT, LOWERBOUND, UPPERBOUND }
+
+    private static class TTEntry {
+        final int depth;
+        final int score;
+        final TTFlag flag;
+        final Move bestMove;
+        TTEntry(int depth, int score, TTFlag flag, Move bestMove) {
+            this.depth = depth; this.score = score; this.flag = flag; this.bestMove = bestMove;
+        }
+    }
+
+    // =============== PST ==================
+    private static class PST {
+        // These PSTs are basic and from White's POV, indices 0..63 (rank 1 -> 8, files a->h)
+        // Tuned lightly; can be improved.
+        static final int[] PAWN_MG = {
+                0, 0, 0, 0, 0, 0, 0, 0,
+                50, 50, 50, 50, 50, 50, 50, 50,
+                10, 10, 20, 30, 30, 20, 10, 10,
+                5, 5, 10, 25, 25, 10, 5, 5,
+                0, 0, 0, 20, 20, 0, 0, 0,
+                5, -5, -10, 0, 0, -10, -5, 5,
+                5, 10, 10, -20, -20, 10, 10, 5,
+                0, 0, 0, 0, 0, 0, 0, 0
+        };
+        static final int[] KNIGHT_MG = {
+                -50, -40, -30, -30, -30, -30, -40, -50,
+                -40, -20, 0, 5, 5, 0, -20, -40,
+                -30, 5, 10, 15, 15, 10, 5, -30,
+                -30, 0, 15, 20, 20, 15, 0, -30,
+                -30, 5, 15, 20, 20, 15, 5, -30,
+                -30, 0, 10, 15, 15, 10, 0, -30,
+                -40, -20, 0, 0, 0, 0, -20, -40,
+                -50, -40, -30, -30, -30, -30, -40, -50
+        };
+        static final int[] BISHOP_MG = {
+                -20, -10, -10, -10, -10, -10, -10, -20,
+                -10, 5, 0, 0, 0, 0, 5, -10,
+                -10, 10, 10, 10, 10, 10, 10, -10,
+                -10, 0, 10, 10, 10, 10, 0, -10,
+                -10, 5, 5, 10, 10, 5, 5, -10,
+                -10, 0, 5, 10, 10, 5, 0, -10,
+                -10, 0, 0, 0, 0, 0, 0, -10,
+                -20, -10, -10, -10, -10, -10, -10, -20
+        };
+        static final int[] ROOK_MG = {
+                0, 0, 0, 5, 5, 0, 0, 0,
+                -5, 0, 0, 0, 0, 0, 0, -5,
+                -5, 0, 0, 0, 0, 0, 0, -5,
+                -5, 0, 0, 0, 0, 0, 0, -5,
+                -5, 0, 0, 0, 0, 0, 0, -5,
+                -5, 0, 0, 0, 0, 0, 0, -5,
+                5, 10, 10, 10, 10, 10, 10, 5,
+                0, 0, 0, 0, 0, 0, 0, 0
+        };
+        static final int[] QUEEN_MG = {
+                -20, -10, -10, -5, -5, -10, -10, -20,
+                -10, 0, 5, 0, 0, 0, 0, -10,
+                -10, 5, 5, 5, 5, 5, 0, -10,
+                0, 0, 5, 5, 5, 5, 0, -5,
+                -5, 0, 5, 5, 5, 5, 0, -5,
+                -10, 0, 5, 5, 5, 5, 0, -10,
+                -10, 0, 0, 0, 0, 0, 0, -10,
+                -20, -10, -10, -5, -5, -10, -10, -20
+        };
+        static final int[] KING_MG = {
+                -30, -40, -40, -50, -50, -40, -40, -30,
+                -30, -40, -40, -50, -50, -40, -40, -30,
+                -30, -40, -40, -50, -50, -40, -40, -30,
+                -30, -40, -40, -50, -50, -40, -40, -30,
+                -20, -30, -30, -40, -40, -30, -30, -20,
+                -10, -20, -20, -20, -20, -20, -20, -10,
+                20, 20, 0, 0, 0, 0, 20, 20,
+                20, 30, 10, 0, 0, 10, 30, 20
+        };
+        static final int[] KING_EG = {
+                -50, -40, -30, -20, -20, -30, -40, -50,
+                -30, -20, -10, 0, 0, -10, -20, -30,
+                -30, -10, 20, 30, 30, 20, -10, -30,
+                -30, -10, 30, 40, 40, 30, -10, -30,
+                -30, -10, 30, 40, 40, 30, -10, -30,
+                -30, -10, 20, 30, 30, 20, -10, -30,
+                -30, -30, 0, 0, 0, 0, -30, -30,
+                -50, -40, -30, -20, -20, -30, -40, -50
+        };
+
+        static int flip(int[] arr, int idx) {
+            // flip vertically (mirror for Black POV)
+            int r = idx / 8, f = idx % 8;
+            int fr = (7 - r) * 8 + f;
+            return arr[fr];
+        }
+    }
+
+    private static Map<String, String[]> createMiniBook() {
+        Map<String, String[]> m = new HashMap<>();
+        try {
+            Board b = new Board();
+            m.put(b.getFen(), new String[]{"e2e4", "d2d4", "g1f3", "c2c4"});
+            // After 1.e4
+            b.doMove(new Move("E2E4", Side.WHITE));
+            m.put(b.getFen(), new String[]{"e7e5", "c7c5", "e7e6"});
+            // After 1.d4
+            b = new Board();
+            b.doMove(new Move("D2D4", Side.WHITE));
+            m.put(b.getFen(), new String[]{"d7d5", "g8f6", "e7e6"});
+        } catch (Exception e) {
+            // If book creation fails, return empty map - agent will work without book
+            LOGGER.warn("Failed to create opening book", e);
+        }
+        return m;
+    }
+
+    // =============== Main launcher (optional) ==================
+    public static void main(String[] args) {
+        AgentConfiguration config = new AgentConfiguration(args);
+        try {
+            config.validate();
+        } catch (IllegalArgumentException e) {
+            System.err.println(e.getMessage());
+            System.exit(1);
+        }
+        GameMode mode;
+        try {
+            mode = GameMode.valueOf(config.getMode());
+        } catch (IllegalArgumentException e) {
+            System.err.println("Invalid game mode: " + config.getMode());
+            System.err.println("Valid modes: TRAINING, OPEN, RANKED");
+            System.exit(1);
+            return;
+        }
+
+        LOGGER.info("Starting {} (SmartAgent)...", config.getAgentName());
+        AdjudicatorClient client = new AdjudicatorClient(config.getServerAddress(), config.getApiKey(), true);
+        SmartAgent agent = new SmartAgent(config.getAgentName());
+        try {
+            client.playGame(agent, mode, config.getTimeControl());
+            LOGGER.info("SmartAgent finished successfully");
+        } catch (Exception e) {
+            LOGGER.error("Game error", e);
+            System.exit(1);
+        }
+    }
+}
