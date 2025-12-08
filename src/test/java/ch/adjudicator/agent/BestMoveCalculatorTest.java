@@ -95,4 +95,83 @@ class BestMoveCalculatorTest {
         // Promotion should be highly valued from material perspective
     }
 
+    @Test
+    void testComputeBestMove_SaveQueenFromCapture() throws Exception {
+        // Position where black queen is under attack and must move
+        // White rook on e1 attacks black queen on e8
+        Board board = new Board();
+        board.loadFromFen("4q2k/8/8/8/8/8/8/4R2K b - - 0 1");
+        
+        Move bestMove = calculator.computeBestMove(board, 1000);
+        
+        assertNotNull(bestMove, "Should find a move to save the queen");
+        // Queen should move away from e8 to avoid capture
+        assertEquals("E8", bestMove.getFrom().toString().toUpperCase(), 
+                "Should move the queen away from danger");
+    }
+
+    @Test
+    void testComputeBestMove_SaveQueenFromCaptureAvoiding() throws Exception {
+        // Position where black queen is under attack and must move
+        // White rook on e1 attacks black queen on e8
+        Board board = new Board();
+        board.loadFromFen("6rk/pp1ppppp/8/4q3/5P2/8/1QQ3PP/RRRRR1RK b - - 0 1");
+
+        Move bestMove = calculator.computeBestMove(board, 1000);
+
+        assertNotNull(bestMove, "Should find a move to save the queen");
+        // Queen should move away from e8 to avoid capture
+        assertEquals("E5B8", bestMove.toString().toUpperCase(),
+                "Should move the queen away from danger");
+    }
+
+    @Test
+    void testComputeBestMove_SavePieceUnderThreat() throws Exception {
+        // Position where black knight on f6 is attacked by white pawn on e5
+        // Black should move the knight to safety
+        Board board = new Board();
+        board.loadFromFen("4k3/8/5n2/4P3/8/8/8/4K3 b - - 0 1");
+        
+        Move bestMove = calculator.computeBestMove(board, 1000);
+        
+        assertNotNull(bestMove, "Should find a move to save the knight");
+        // Knight should move away from f6
+        assertEquals("F6", bestMove.getFrom().toString().toUpperCase(), 
+                "Should move the threatened knight");
+    }
+
+    @Test
+    void testComputeBestMove_SaveRookVsCapturePawn() throws Exception {
+        // Black rook on d8 is attacked by white queen on d1
+        // Black can either save the rook or capture a white pawn on h2
+        // Saving the rook (500) should be prioritized over capturing pawn (100)
+        Board board = new Board();
+        board.loadFromFen("3r3k/8/8/8/8/8/7P/3Q3K b - - 0 1");
+        
+        Move bestMove = calculator.computeBestMove(board, 1000);
+        
+        assertNotNull(bestMove, "Should find best defensive move");
+        // Should prioritize saving the rook (worth 500) over capturing pawn (worth 100)
+        assertEquals("D8", bestMove.getFrom().toString().toUpperCase(), 
+                "Should move the threatened rook to safety");
+    }
+
+    @Test
+    void testComputeBestMove_MultiplePiecesThreatenedSaveHigherValue() throws Exception {
+        // Black knight on f6 (300) and black bishop on c6 (300) both under attack
+        // White pawn on e5 attacks knight, white pawn on b5 attacks bishop
+        // Both pieces need to move, but bot can only move one per turn
+        // Should save either piece (both equal value)
+        Board board = new Board();
+        board.loadFromFen("4k3/8/2b2n2/1P2P3/8/8/8/4K3 b - - 0 1");
+        
+        Move bestMove = calculator.computeBestMove(board, 1000);
+        
+        assertNotNull(bestMove, "Should find a move to save one of the threatened pieces");
+        // Should move either the knight or bishop to safety
+        assertTrue(bestMove.getFrom().toString().toUpperCase().equals("F6") || 
+                   bestMove.getFrom().toString().toUpperCase().equals("C6"),
+                "Should move one of the threatened pieces (knight or bishop)");
+    }
+
 }
