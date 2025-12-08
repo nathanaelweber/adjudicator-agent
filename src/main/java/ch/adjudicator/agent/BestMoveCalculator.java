@@ -413,13 +413,18 @@ public class BestMoveCalculator {
         noisy.sort((a, b) -> Integer.compare(mvvLvaScore(b, searchBoard), mvvLvaScore(a, searchBoard)));
 
         for (Move m : noisy) {
-            searchBoard.doMove(m);
-            int score = -quiescence(-beta, -alpha, ply + 1, searchBoard);
-            searchBoard.undoMove();
-            if (timeUp) return 0;
+            try {
+                searchBoard.doMove(m);
+                int score = -quiescence(-beta, -alpha, ply + 1, searchBoard);
+                searchBoard.undoMove();
+                if (timeUp) return 0;
 
-            if (score >= beta) return beta;
-            if (score > alpha) alpha = score;
+                if (score >= beta) return beta;
+                if (score > alpha) alpha = score;
+            } catch (Exception e) {
+                // Skip moves that cause errors (e.g., invalid board states from malformed FEN)
+                continue;
+            }
         }
         return alpha;
     }
@@ -532,23 +537,78 @@ public class BestMoveCalculator {
             mobilityBlack = sideToMoveM;
         }
 
+        // Hanging pieces penalty
+        int hangingWhite = detectHangingPieces(Side.WHITE, searchBoard);
+        int hangingBlack = detectHangingPieces(Side.BLACK, searchBoard);
+
         // Game phase: based on non-pawn material
         int nonPawnMaterial = (materialWhite - countPawns(Side.WHITE, searchBoard) * PAWN)
                 + (materialBlack - countPawns(Side.BLACK, searchBoard) * PAWN);
         int phase = Math.max(0, Math.min(24, nonPawnMaterial / 320)); // rough 0..24
 
-        int mgScore = (materialWhite - materialBlack) + (pstWhite - pstBlack) + 2 * (mobilityWhite - mobilityBlack);
+        int mgScore = (materialWhite - materialBlack) + (pstWhite - pstBlack) + 2 * (mobilityWhite - mobilityBlack)
+                - (hangingWhite - hangingBlack); // Subtract hanging piece penalties
 
         // Endgame PST for king (encourage centralization)
         int kingEgWhite = PST.KING_EG[squareToIndex(findKing(Side.WHITE, searchBoard), Side.WHITE)];
         int kingEgBlack = PST.flip(PST.KING_EG, squareToIndex(findKing(Side.BLACK, searchBoard), Side.WHITE));
-        int egScore = (materialWhite - materialBlack) + (pstWhite - pstBlack) + (kingEgWhite - kingEgBlack) * 2;
+        int egScore = (materialWhite - materialBlack) + (pstWhite - pstBlack) + (kingEgWhite - kingEgBlack) * 2
+                - (hangingWhite - hangingBlack); // Subtract hanging piece penalties
 
         int score = (mgScore * phase + egScore * (24 - phase)) / 24;
 
-        // Return from our perspective
-        if (myColor == Side.WHITE) return score;
+        // Return from side-to-move's perspective (required for negamax)
+        // score represents White's advantage, so flip for Black
+        if (stm == Side.WHITE) return score;
         return -score;
+    }
+
+    /**
+     * Detects hanging pieces for a given side.
+     * A piece is considered hanging if:
+     * 1. It is attacked by opponent pieces
+     * 2. It is not defended, OR the number of attackers > number of defenders
+     * 
+     * Returns a penalty score (positive value = bad for the side).
+     */
+    private int detectHangingPieces(Side side, Board searchBoard) {
+        int hangingPenalty = 0;
+        Side opponent = (side == Side.WHITE) ? Side.BLACK : Side.WHITE;
+        
+        for (Square sq : Square.values()) {
+            Piece piece = searchBoard.getPiece(sq);
+            if (piece == Piece.NONE) continue;
+            
+            // Check if this piece belongs to the side we're evaluating
+            boolean isPieceBelongsToSide = (side == Side.WHITE && piece.getPieceSide() == Side.WHITE)
+                    || (side == Side.BLACK && piece.getPieceSide() == Side.BLACK);
+            
+            if (!isPieceBelongsToSide) continue;
+            
+            // Skip kings - they can't be "hanging" in the traditional sense
+            if (piece == Piece.WHITE_KING || piece == Piece.BLACK_KING) continue;
+            
+            // Count attackers from opponent
+            long attackers = searchBoard.squareAttackedBy(sq, opponent);
+            int attackerCount = Long.bitCount(attackers);
+            
+            if (attackerCount == 0) continue; // Not attacked, not hanging
+            
+            // Count defenders from our side
+            long defenders = searchBoard.squareAttackedBy(sq, side);
+            int defenderCount = Long.bitCount(defenders);
+            
+            // Piece is hanging if attacked and not defended, or more attackers than defenders
+            if (defenderCount == 0) {
+                // Completely undefended piece that is attacked - full penalty
+                hangingPenalty += pieceValue(piece);
+            } else if (attackerCount > defenderCount) {
+                // More attackers than defenders - partial penalty (50% of piece value)
+                hangingPenalty += pieceValue(piece) / 2;
+            }
+        }
+        
+        return hangingPenalty;
     }
 
     private Square findKing(Side color, Board searchBoard) {

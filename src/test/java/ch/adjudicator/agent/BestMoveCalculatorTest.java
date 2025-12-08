@@ -115,14 +115,19 @@ class BestMoveCalculatorTest {
         // Position where black queen is under attack and must move
         // White rook on e1 attacks black queen on e8
         Board board = new Board();
-        board.loadFromFen("6rk/pp1ppppp/8/4q3/5P2/8/1QQ3PP/RRRRR1RK b - - 0 1");
+        //board.loadFromFen("6rk/pp1ppppp/8/4q3/5P2/8/1QQ3PP/RRRRR1RK b - - 0 1");
+        board.loadFromFen("6rk/pp1p1ppp/3q4/4P3/8/8/6PP/3RR2K b - - 0 1");
 
         Move bestMove = calculator.computeBestMove(board, 1000);
 
         assertNotNull(bestMove, "Should find a move to save the queen");
         // Queen should move away from e8 to avoid capture
-        assertEquals("E5B8", bestMove.toString().toUpperCase(),
+        assertEquals("D6", bestMove.getFrom().toString().toUpperCase(),
                 "Should move the queen away from danger");
+        assertNotEquals("D6E5", bestMove.toString().toUpperCase(),
+                "Should move the queen to a safe spot, capture threatens recapture");
+        assertFalse(bestMove.toString().toUpperCase().startsWith("D6D"),
+                "Should move the queen to a safe spot, staying on d-file is threatened from the rook on d1, and rook on d1 is protected by rook on e1.");
     }
 
     @Test
