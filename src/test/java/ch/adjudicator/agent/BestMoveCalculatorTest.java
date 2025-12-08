@@ -33,15 +33,12 @@ class BestMoveCalculatorTest {
         // Position where black can capture a white pawn
         // Setup: White pawn on e4, black pawn can capture from d5
         Board board = new Board();
-        board.loadFromFen("4k3/8/8/3p4/4P3/8/8/4K3 w KQkq d6 0 2");
-        
-        // Make white move first (e4 is already there, just move to get black's turn)
-        board.loadFromFen("4k3/8/8/3p4/4P3/8/8/4K3 w KQkq - 0 2");
+        board.loadFromFen("4k3/8/8/3p4/4P3/8/8/4K3 b KQkq - 0 2");
         
         Move bestMove = calculator.computeBestMove(board, 1000);
         
-        assertEquals("DXE4", bestMove.toString().toUpperCase(), "Should find simple caputre for black");
-        // Black should consider capturing the pawn on e4 with dxe4
+        assertEquals("D5E4", bestMove.toString().toUpperCase(), "Should find simple capture for black");
+        // Black should consider capturing the pawn on e4 with d5xe4
     }
 
     @Test
