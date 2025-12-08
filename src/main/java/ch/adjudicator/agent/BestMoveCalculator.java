@@ -118,6 +118,11 @@ public class BestMoveCalculator {
                 throw new Exception("No legal moves available");
             }
 
+            LOGGER.debug("[{}] Legal moves: {}", name, rootMoves.size());
+            for (Move m : rootMoves) {
+                LOGGER.debug("[{}]   {}", name, moveToLAN(m));
+            }
+
             // Order root moves crudely by MVV/LVA for first iteration
             orderMoves(rootMoves, null, 0, searchBoard);
 
@@ -140,8 +145,18 @@ public class BestMoveCalculator {
                     if (timeExceeded()) break;
 
                     searchBoard.doMove(move);
+                    
+                    // Check if the moved piece is now hanging (attacked and not adequately defended)
+                    int hangingPenalty = getMovedPieceHangingPenalty(move, searchBoard);
+                    
                     int score = -alphaBeta(depth - 1, -beta, -alpha, false, 1, searchBoard);
+                    
+                    // Apply hanging penalty to discourage leaving pieces hanging
+                    score -= hangingPenalty;
+                    
                     searchBoard.undoMove();
+
+                    LOGGER.debug("[{}] Depth {} move {} score {} hangingPenalty {}", name, depth, moveToLAN(move), score, hangingPenalty);
 
                     if (score > iterationBestScore) {
                         iterationBestScore = score;
@@ -353,7 +368,15 @@ public class BestMoveCalculator {
         for (int i = 0; i < moves.size(); i++) {
             Move m = moves.get(i);
             searchBoard.doMove(m);
+            
+            // Check if the moved piece is now hanging (attacked and not adequately defended)
+            int hangingPenalty = getMovedPieceHangingPenalty(m, searchBoard);
+            
             int score = -alphaBeta(depth - 1, -beta, -alpha, !maximizing, ply + 1, searchBoard);
+            
+            // Apply hanging penalty to discourage leaving pieces hanging
+            score -= hangingPenalty;
+            
             searchBoard.undoMove();
 
             if (timeUp) return 0;
@@ -537,23 +560,17 @@ public class BestMoveCalculator {
             mobilityBlack = sideToMoveM;
         }
 
-        // Hanging pieces penalty
-        int hangingWhite = detectHangingPieces(Side.WHITE, searchBoard);
-        int hangingBlack = detectHangingPieces(Side.BLACK, searchBoard);
-
         // Game phase: based on non-pawn material
         int nonPawnMaterial = (materialWhite - countPawns(Side.WHITE, searchBoard) * PAWN)
                 + (materialBlack - countPawns(Side.BLACK, searchBoard) * PAWN);
         int phase = Math.max(0, Math.min(24, nonPawnMaterial / 320)); // rough 0..24
 
-        int mgScore = (materialWhite - materialBlack) + (pstWhite - pstBlack) + 2 * (mobilityWhite - mobilityBlack)
-                - (hangingWhite - hangingBlack); // Subtract hanging piece penalties
+        int mgScore = (materialWhite - materialBlack) + (pstWhite - pstBlack) + 2 * (mobilityWhite - mobilityBlack);
 
         // Endgame PST for king (encourage centralization)
         int kingEgWhite = PST.KING_EG[squareToIndex(findKing(Side.WHITE, searchBoard), Side.WHITE)];
         int kingEgBlack = PST.flip(PST.KING_EG, squareToIndex(findKing(Side.BLACK, searchBoard), Side.WHITE));
-        int egScore = (materialWhite - materialBlack) + (pstWhite - pstBlack) + (kingEgWhite - kingEgBlack) * 2
-                - (hangingWhite - hangingBlack); // Subtract hanging piece penalties
+        int egScore = (materialWhite - materialBlack) + (pstWhite - pstBlack) + (kingEgWhite - kingEgBlack) * 2;
 
         int score = (mgScore * phase + egScore * (24 - phase)) / 24;
 
@@ -561,6 +578,78 @@ public class BestMoveCalculator {
         // score represents White's advantage, so flip for Black
         if (stm == Side.WHITE) return score;
         return -score;
+    }
+
+    /**
+     * Checks if the piece that was just moved is now hanging.
+     * Returns a penalty score if the piece is attacked and inadequately defended.
+     */
+    private int getMovedPieceHangingPenalty(Move move, Board searchBoard) {
+        Square targetSquare = move.getTo();
+        Piece movedPiece = searchBoard.getPiece(targetSquare);
+        
+        if (movedPiece == Piece.NONE) return 0;
+        
+        // Don't penalize king moves for being "hanging"
+        if (movedPiece == Piece.WHITE_KING || movedPiece == Piece.BLACK_KING) return 0;
+        
+        Side ourSide = movedPiece.getPieceSide();
+        Side opponentSide = (ourSide == Side.WHITE) ? Side.BLACK : Side.WHITE;
+        
+        // Count attackers from opponent
+        long attackers = searchBoard.squareAttackedBy(targetSquare, opponentSide);
+        int attackerCount = Long.bitCount(attackers);
+        
+        if (attackerCount == 0) return 0; // Not attacked, not hanging
+        
+        // Count defenders from our side
+        long defenders = searchBoard.squareAttackedBy(targetSquare, ourSide);
+        int defenderCount = Long.bitCount(defenders);
+        
+        // Piece is hanging if attacked and not defended, or more attackers than defenders
+        if (defenderCount == 0) {
+            // Completely undefended piece that is attacked - full penalty
+            return pieceValue(movedPiece);
+        } else if (attackerCount > defenderCount) {
+            // More attackers than defenders - partial penalty (50% of piece value)
+            return pieceValue(movedPiece) / 2;
+        }
+        
+        return 0;
+    }
+
+    /**
+     * Optimized version that only penalizes pieces that are attacked and have NO defenders at all.
+     * This is much faster than checking attacker/defender counts.
+     */
+    private int detectHangingPiecesOptimized(Side side, Board searchBoard) {
+        int hangingPenalty = 0;
+        Side opponent = (side == Side.WHITE) ? Side.BLACK : Side.WHITE;
+        
+        for (Square sq : Square.values()) {
+            Piece piece = searchBoard.getPiece(sq);
+            if (piece == Piece.NONE) continue;
+            
+            // Check if this piece belongs to the side we're evaluating
+            if (piece.getPieceSide() != side) continue;
+            
+            // Skip kings
+            if (piece == Piece.WHITE_KING || piece == Piece.BLACK_KING) continue;
+            
+            // Check if attacked by opponent
+            long attackers = searchBoard.squareAttackedBy(sq, opponent);
+            if (attackers == 0) continue;
+            
+            // Check if defended by our side
+            long defenders = searchBoard.squareAttackedBy(sq, side);
+            
+            // Only penalize if completely undefended
+            if (defenders == 0) {
+                hangingPenalty += pieceValue(piece);
+            }
+        }
+        
+        return hangingPenalty;
     }
 
     /**
@@ -661,7 +750,7 @@ public class BestMoveCalculator {
     }
 
     private static long computeTimeBudget(int remainingMs, int incMs) {
-        long budget = remainingMs / 40L + 3L * incMs;
+        long budget = remainingMs / 20L + 3L * incMs;  // Changed from /40 to /20 for more time
         return Math.max(50L, Math.min(budget, Math.max(100L, remainingMs / 2L)));
     }
 

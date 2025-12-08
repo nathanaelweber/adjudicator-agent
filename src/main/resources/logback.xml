@@ -20,6 +20,9 @@
         </encoder>
     </appender>
 
+    <!-- Specific logger for BestMoveCalculator at DEBUG level -->
+    <logger name="ch.adjudicator.agent.BestMoveCalculator" level="DEBUG" />
+
     <!-- Root logger - log everything at INFO level -->
     <root level="INFO">
         <appender-ref ref="CONSOLE" />

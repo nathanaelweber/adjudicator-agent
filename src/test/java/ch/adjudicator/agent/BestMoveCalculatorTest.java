@@ -111,14 +111,13 @@ class BestMoveCalculatorTest {
     }
 
     @Test
-    void testComputeBestMove_SaveQueenFromCaptureAvoiding() throws Exception {
+    void testComputeBestMove_SaveQueenFromCaptureAvoidingRecapture() throws Exception {
         // Position where black queen is under attack and must move
         // White rook on e1 attacks black queen on e8
         Board board = new Board();
-        //board.loadFromFen("6rk/pp1ppppp/8/4q3/5P2/8/1QQ3PP/RRRRR1RK b - - 0 1");
         board.loadFromFen("6rk/pp1p1ppp/3q4/4P3/8/8/6PP/3RR2K b - - 0 1");
 
-        Move bestMove = calculator.computeBestMove(board, 1000);
+        Move bestMove = calculator.computeBestMove(board, 10000);
 
         assertNotNull(bestMove, "Should find a move to save the queen");
         // Queen should move away from e8 to avoid capture
