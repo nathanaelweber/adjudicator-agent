@@ -10,11 +10,17 @@ import com.github.bhlangonijr.chesslib.move.Move;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.*;
 import java.util.concurrent.ThreadLocalRandom;
 
 public class BestMoveCalculator {
     private static final Logger LOGGER = LoggerFactory.getLogger(BestMoveCalculator.class);
+    
+    // Opening book
+    private OpeningBook openingBook;
+    private boolean lastMoveWasFromBook = false;
 
     // Material values (centipawns)
     private static final int PAWN = 100;
@@ -53,8 +59,43 @@ public class BestMoveCalculator {
     // Transposition Table
     private final Map<Long, TTEntry> tt = new HashMap<>(TABLE_SIZE_MB * 1024);
 
+    public BestMoveCalculator() {
+        // Try to load opening book from docs directory
+        try {
+            Path bookPath = Paths.get("docs", "Perfect_2021", "BIN", "Perfect2021.bin");
+            if (bookPath.toFile().exists()) {
+                openingBook = new OpeningBook(bookPath);
+                LOGGER.info("Opening book loaded successfully from {}", bookPath);
+            } else {
+                LOGGER.warn("Opening book not found at {}, will play without book", bookPath);
+            }
+        } catch (Exception e) {
+            LOGGER.warn("Failed to load opening book, will play without book", e);
+        }
+    }
+
+    public OpeningBook getOpeningBook() {
+        return openingBook;
+    }
+
+    public boolean wasLastMoveFromBook() {
+        return lastMoveWasFromBook;
+    }
+
     public Move computeBestMove(Board searchBoard, int yourTimeMs) throws Exception{
         try {
+            // Check opening book first
+            lastMoveWasFromBook = false;
+            if (openingBook != null) {
+                Move bookMove = openingBook.getBookMove(searchBoard);
+                if (bookMove != null) {
+                    lastMoveWasFromBook = true;
+                    LOGGER.info("[{}] Using opening book move: {}", name, moveToLAN(bookMove));
+                    return bookMove;
+                }
+                LOGGER.info("[{}] Position not in opening book, starting search", name);
+            }
+            
             // Compute time budget
             int yourTime = Math.max(0, yourTimeMs);
             long budgetMs = computeTimeBudget(yourTime, incrementMs);
