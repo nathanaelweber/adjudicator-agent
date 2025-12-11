@@ -421,35 +421,63 @@ public class BestMoveCalculator {
         int bestScore = -CHECKMATE_SCORE;
         Move best = null;
 
-        for (int i = 0; i < moves.size(); i++) {
-            Move m = moves.get(i);
-            searchBoard.doMove(m);
+        // Only consider the best move for the opponent (paranoid evaluation)
+        // This prevents giving the opponent good move opportunities
+        if (!maximizing) {
+            // For opponent moves, find the single best move and only evaluate that
+            Move opponentBest = null;
+            int opponentBestScore = -CHECKMATE_SCORE;
             
-            // Check if the moved piece is now hanging (attacked and not adequately defended)
-            int hangingPenalty = getMovedPieceHangingPenalty(m, searchBoard);
-            
-            int score = -alphaBeta(depth - 1, -beta, -alpha, !maximizing, ply + 1, searchBoard);
-            
-            // Apply hanging penalty to discourage leaving pieces hanging
-            score -= hangingPenalty;
-            
-            searchBoard.undoMove();
-
-            if (timeUp) return 0;
-
-            if (score > bestScore) {
-                bestScore = score;
-                best = m;
-                if (score > alpha) {
-                    alpha = score;
-                    // History heuristic boost for quiet moves
-                    if (!isCapture(m, searchBoard)) addHistory(m, depth);
+            for (Move m : moves) {
+                searchBoard.doMove(m);
+                int hangingPenalty = getMovedPieceHangingPenalty(m, searchBoard);
+                int score = -alphaBeta(depth - 1, -beta, -alpha, !maximizing, ply + 1, searchBoard);
+                score -= hangingPenalty;
+                searchBoard.undoMove();
+                
+                if (timeUp) return 0;
+                
+                if (score > opponentBestScore) {
+                    opponentBestScore = score;
+                    opponentBest = m;
                 }
             }
+            
+            // Return the opponent's best score (which is worst for us)
+            bestScore = opponentBestScore;
+            best = opponentBest;
+        } else {
+            // For our moves, evaluate all options (standard alpha-beta)
+            for (int i = 0; i < moves.size(); i++) {
+                Move m = moves.get(i);
+                searchBoard.doMove(m);
+                
+                // Check if the moved piece is now hanging (attacked and not adequately defended)
+                int hangingPenalty = getMovedPieceHangingPenalty(m, searchBoard);
+                
+                int score = -alphaBeta(depth - 1, -beta, -alpha, !maximizing, ply + 1, searchBoard);
+                
+                // Apply hanging penalty to discourage leaving pieces hanging
+                score -= hangingPenalty;
+                
+                searchBoard.undoMove();
 
-            if (alpha >= beta) {
-                storeKiller(m, ply, searchBoard);
-                break; // beta cutoff
+                if (timeUp) return 0;
+
+                if (score > bestScore) {
+                    bestScore = score;
+                    best = m;
+                    if (score > alpha) {
+                        alpha = score;
+                        // History heuristic boost for quiet moves
+                        if (!isCapture(m, searchBoard)) addHistory(m, depth);
+                    }
+                }
+
+                if (alpha >= beta) {
+                    storeKiller(m, ply, searchBoard);
+                    break; // beta cutoff
+                }
             }
         }
 
