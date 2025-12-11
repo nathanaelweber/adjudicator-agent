@@ -125,7 +125,12 @@ public class BestMoveCalculator {
             }
 
             // Order root moves crudely by MVV/LVA for first iteration
-            orderMoves(rootMoves, null, 0, searchBoard);
+            // Pre-compute ordering scores before threading to avoid concurrent modification issues
+            Map<Move, Integer> orderingScores = new HashMap<>();
+            for (Move m : rootMoves) {
+                orderingScores.put(m, scoreForOrdering(m, 0, searchBoard));
+            }
+            rootMoves.sort((a, b) -> Integer.compare(orderingScores.get(b), orderingScores.get(a)));
 
             for (int depth = 1; depth <= MAX_DEPTH; depth++) {
                 if (timeExceeded()) break;
@@ -509,8 +514,14 @@ public class BestMoveCalculator {
         // PV first
         if (pv != null && moves.remove(pv)) moves.add(0, pv);
 
-        // Simple scoring for ordering
-        moves.sort((a, b) -> Integer.compare(scoreForOrdering(b, ply, searchBoard), scoreForOrdering(a, ply, searchBoard)));
+        // Pre-compute all scores to avoid concurrent modification issues during sort
+        Map<Move, Integer> scores = new HashMap<>();
+        for (Move m : moves) {
+            scores.put(m, scoreForOrdering(m, ply, searchBoard));
+        }
+        
+        // Sort using pre-computed scores
+        moves.sort((a, b) -> Integer.compare(scores.get(b), scores.get(a)));
     }
 
     private int scoreForOrdering(Move m, int ply, Board searchBoard) {
