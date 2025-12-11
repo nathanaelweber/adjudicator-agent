@@ -27,9 +27,27 @@ public class BestMoveCalculator {
     private static final int CHECKMATE_SCORE = 30000;
     private static final int DRAW_SCORE = 0;
 
+    // Transposition Table constants
+    private static final int TT_SIZE = 1 << 20; // 1M entries (~64MB with 64 bytes per entry)
+    private static final int TT_MASK = TT_SIZE - 1;
+    
+    // TT node types
+    private static final byte TT_EXACT = 0;
+    private static final byte TT_ALPHA = 1;
+    private static final byte TT_BETA = 2;
+
     // Opening book
     private OpeningBook openingBook;
     private boolean lastMoveWasFromBook = false;
+
+    // Transposition Table
+    private TranspositionTableEntry[] transpositionTable;
+    
+    // Position history for repetition detection
+    private List<Long> positionHistory;
+    
+    // Zobrist hashing
+    private ZobristHash zobristHash;
 
     // Game control
     private int incrementMs = 0;
@@ -37,6 +55,18 @@ public class BestMoveCalculator {
 
 
     public BestMoveCalculator() {
+        // Initialize Transposition Table
+        transpositionTable = new TranspositionTableEntry[TT_SIZE];
+        for (int i = 0; i < TT_SIZE; i++) {
+            transpositionTable[i] = new TranspositionTableEntry();
+        }
+        
+        // Initialize Zobrist hashing
+        zobristHash = new ZobristHash();
+        
+        // Initialize position history for repetition detection
+        positionHistory = new ArrayList<>();
+        
         // Try to load opening book from docs directory
         try {
             Path bookPath = Paths.get("docs", "Perfect_2021", "BIN", "Perfect2021.bin");
@@ -126,6 +156,11 @@ public class BestMoveCalculator {
     }
 
     public void clearSearchHelpers() {
+        // Clear position history for new game
+        positionHistory.clear();
+        
+        // Optionally clear transposition table (can keep it for analysis positions)
+        // For now, keeping TT between moves but clearing history
     }
 
     private String moveToLAN(Move move) {
@@ -255,6 +290,30 @@ public class BestMoveCalculator {
      * Alpha-beta search with a fixed depth.
      */
     private int alphaBeta(Board board, int depth, int alpha, int beta, int ply) {
+        int alphaOrig = alpha;
+        
+        // Compute position hash
+        long positionHash = zobristHash.computeHash(board);
+        
+        // Check for repetition (3-fold repetition is a draw)
+        if (isRepetition(positionHash)) {
+            return DRAW_SCORE;
+        }
+        
+        // Transposition table lookup
+        int ttIndex = (int)(positionHash & TT_MASK);
+        TranspositionTableEntry ttEntry = transpositionTable[ttIndex];
+        
+        if (ttEntry.isValid(positionHash, depth)) {
+            if (ttEntry.nodeType == TT_EXACT) {
+                return ttEntry.score;
+            } else if (ttEntry.nodeType == TT_ALPHA && ttEntry.score <= alpha) {
+                return alpha;
+            } else if (ttEntry.nodeType == TT_BETA && ttEntry.score >= beta) {
+                return beta;
+            }
+        }
+        
         // Check if position is terminal (checkmate, stalemate)
         List<Move> legalMoves = board.legalMoves();
         if (legalMoves.isEmpty()) {
@@ -272,14 +331,30 @@ public class BestMoveCalculator {
             return quiescence(board, alpha, beta, ply);
         }
         
+        // Try TT move first if available
+        Move ttMove = ttEntry.isValid(positionHash, depth) ? ttEntry.bestMove : null;
+        if (ttMove != null && legalMoves.contains(ttMove)) {
+            legalMoves.remove(ttMove);
+            legalMoves.add(0, ttMove);
+        }
+        
         int bestScore = -CHECKMATE_SCORE - 1000;
+        Move bestMove = null;
         
         for (Move move : legalMoves) {
             board.doMove(move);
+            positionHistory.add(positionHash);
+            
             int score = -alphaBeta(board, depth - 1, -beta, -alpha, ply + 1);
+            
+            positionHistory.remove(positionHistory.size() - 1);
             board.undoMove();
             
-            bestScore = Math.max(bestScore, score);
+            if (score > bestScore) {
+                bestScore = score;
+                bestMove = move;
+            }
+            
             alpha = Math.max(alpha, score);
             
             if (alpha >= beta) {
@@ -287,7 +362,34 @@ public class BestMoveCalculator {
             }
         }
         
+        // Store in transposition table
+        byte nodeType;
+        if (bestScore <= alphaOrig) {
+            nodeType = TT_ALPHA;
+        } else if (bestScore >= beta) {
+            nodeType = TT_BETA;
+        } else {
+            nodeType = TT_EXACT;
+        }
+        ttEntry.store(positionHash, depth, bestScore, bestMove, nodeType);
+        
         return bestScore;
+    }
+    
+    /**
+     * Check if current position is a repetition (2-fold or more in search tree)
+     */
+    private boolean isRepetition(long positionHash) {
+        int count = 0;
+        for (int i = positionHistory.size() - 1; i >= 0; i--) {
+            if (positionHistory.get(i) == positionHash) {
+                count++;
+                if (count >= 2) {
+                    return true; // 3-fold repetition (current + 2 in history)
+                }
+            }
+        }
+        return false;
     }
 
     /**
@@ -352,5 +454,134 @@ public class BestMoveCalculator {
         }
         
         return bestMove;
+    }
+    
+    /**
+     * Transposition Table Entry structure
+     */
+    private static class TranspositionTableEntry {
+        long zobristKey;
+        int depth;
+        int score;
+        Move bestMove;
+        byte nodeType; // TT_EXACT, TT_ALPHA, or TT_BETA
+        
+        TranspositionTableEntry() {
+            this.zobristKey = 0L;
+            this.depth = -1;
+            this.score = 0;
+            this.bestMove = null;
+            this.nodeType = TT_ALPHA;
+        }
+        
+        void store(long key, int depth, int score, Move move, byte type) {
+            this.zobristKey = key;
+            this.depth = depth;
+            this.score = score;
+            this.bestMove = move;
+            this.nodeType = type;
+        }
+        
+        boolean isValid(long key, int depth) {
+            return this.zobristKey == key && this.depth >= depth;
+        }
+    }
+    
+    /**
+     * Zobrist Hashing for position identification
+     */
+    private static class ZobristHash {
+        private long[][][] pieceKeys; // [piece_type][color][square]
+        private long[] castlingKeys; // 4 castling rights
+        private long[] enPassantKeys; // 8 files
+        private long sideToMoveKey;
+        private Random random;
+        
+        ZobristHash() {
+            random = new Random(123456789L); // Fixed seed for reproducibility
+            pieceKeys = new long[6][2][64];
+            castlingKeys = new long[4];
+            enPassantKeys = new long[8];
+            
+            // Initialize piece keys
+            for (int piece = 0; piece < 6; piece++) {
+                for (int color = 0; color < 2; color++) {
+                    for (int square = 0; square < 64; square++) {
+                        pieceKeys[piece][color][square] = random.nextLong();
+                    }
+                }
+            }
+            
+            // Initialize castling keys
+            for (int i = 0; i < 4; i++) {
+                castlingKeys[i] = random.nextLong();
+            }
+            
+            // Initialize en passant keys
+            for (int i = 0; i < 8; i++) {
+                enPassantKeys[i] = random.nextLong();
+            }
+            
+            sideToMoveKey = random.nextLong();
+        }
+        
+        long computeHash(Board board) {
+            long hash = 0L;
+            
+            // Hash pieces
+            for (Square square : Square.values()) {
+                if (square == Square.NONE) continue;
+                
+                Piece piece = board.getPiece(square);
+                if (piece == Piece.NONE) continue;
+                
+                int pieceType = getPieceTypeIndex(piece);
+                int color = piece.getPieceSide() == Side.WHITE ? 0 : 1;
+                int squareIndex = square.ordinal();
+                
+                hash ^= pieceKeys[pieceType][color][squareIndex];
+            }
+            
+            // Hash castling rights
+            String castleStr = board.getCastleRight(Side.WHITE).toString() +
+                              board.getCastleRight(Side.BLACK).toString();
+            if (castleStr.contains("K")) {
+                hash ^= castlingKeys[0];
+            }
+            if (castleStr.contains("Q")) {
+                hash ^= castlingKeys[1];
+            }
+            if (castleStr.contains("k")) {
+                hash ^= castlingKeys[2];
+            }
+            if (castleStr.contains("q")) {
+                hash ^= castlingKeys[3];
+            }
+            
+            // Hash en passant
+            if (board.getEnPassant() != Square.NONE) {
+                int file = board.getEnPassant().getFile().ordinal();
+                hash ^= enPassantKeys[file];
+            }
+            
+            // Hash side to move
+            if (board.getSideToMove() == Side.BLACK) {
+                hash ^= sideToMoveKey;
+            }
+            
+            return hash;
+        }
+        
+        private int getPieceTypeIndex(Piece piece) {
+            switch (piece.getPieceType()) {
+                case PAWN: return 0;
+                case KNIGHT: return 1;
+                case BISHOP: return 2;
+                case ROOK: return 3;
+                case QUEEN: return 4;
+                case KING: return 5;
+                default: return 0;
+            }
+        }
     }
 }
