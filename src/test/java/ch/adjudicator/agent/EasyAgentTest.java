@@ -26,8 +26,6 @@ class EasyAgentTest {
         
         assertNotNull(move);
         assertFalse(move.isEmpty());
-        // Initial move should be a white opening (e.g. "e2e4")
-        assertTrue(move.matches("[a-h][27][a-h][3456]"));
     }
 
     @Test

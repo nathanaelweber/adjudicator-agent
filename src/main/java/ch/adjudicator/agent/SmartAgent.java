@@ -42,14 +42,18 @@ public class SmartAgent implements Agent {
     public Move computeMove(MoveRequest request) throws Exception {
         LOGGER.info("[{}] My turn! Time remaining: {}ms", name, request.getYourTimeMs());
 
-        // Update board with opponent's move if present
+        // Update board with opponent's move(s) if present
         if (!request.getOpponentMove().isEmpty()) {
             String opponentMove = request.getOpponentMove();
             LOGGER.info("[{}] Opponent played: {}", name, opponentMove);
 
             try {
-                Move move = parseMove(opponentMove);
-                board.doMove(move);
+                // Handle multiple moves separated by spaces
+                String[] moves = opponentMove.trim().split("\\s+");
+                for (String moveStr : moves) {
+                    Move move = parseSingleMove(moveStr);
+                    board.doMove(move);
+                }
             } catch (Throwable e) {
                 LOGGER.warn("[{}] Failed to parse opponent move: {}", name, opponentMove, e);
                 // If we can't parse the move, reset the board and continue
@@ -122,10 +126,10 @@ public class SmartAgent implements Agent {
     }
 
     /**
-     * Parse a move in Long Algebraic Notation (LAN) format.
+     * Parse a single move in Long Algebraic Notation (LAN) format.
      * Examples: "e2e4", "e7e8q" (promotion)
      */
-    private Move parseMove(String lan) {
+    private Move parseSingleMove(String lan) {
         // chesslib expects moves in format like "E2E4"
         // LAN format: source square + destination square + optional promotion piece
         String upperLan = lan.toUpperCase();
