@@ -74,5 +74,13 @@ Focus on maximizing engine playing strength and resource efficiency.
 | [ ] | **Advanced Pruning** | Null Move Pruning (NMP) | Implement NMP (with verification search) for aggressive pruning in non-critical positions. |
 | [ ] | | Late Move Reductions (LMR) | Implement LMR for deeper search in quiet lines by reducing the depth of low-ordered moves. |
 | [ ] | **Pondering Implementation** | Background Search | Implement a background thread to start searching the opponent's most likely reply *immediately* after the agent makes its move. |
-| [ ] | **Time Management** | Dynamic Allocation | Develop a dynamic time management function that allocates search time based on remaining time, moves until the next time control, and game phase. |
+| [✓] | **Time Management** | Dynamic Allocation | Implemented dynamic time management that allocates search time based on remaining time, increment, estimated moves until time control (40 moves assumed), and game phase. Uses phase-dependent multipliers: 0.5x for opening, 1.5x for middlegame, 1.0x for endgame. Includes safety bounds and extra conservatism in time trouble. |
 | [ ] | **Endgame Tablebase** | Syzygy or similar | Integrate a third-party tablebase (e.g., Syzygy) lookup for guaranteed optimal play in simple endgames (e.g., 5 pieces or less). |
+
+**Phase 4 Implementation Notes:**
+- Time Management (Task 4) completed: Dynamic time allocation considers game phase (detected by piece count), estimated moves remaining, and applies phase-specific multipliers
+- Opening phase (≥24 pieces): Uses 0.5x multiplier to conserve time
+- Middlegame phase (12-23 pieces): Uses 1.5x multiplier for critical tactical positions  
+- Endgame phase (<12 pieces): Uses 1.0x multiplier for balanced time usage
+- Includes safety bounds (50ms minimum, 40% maximum of remaining time) and time trouble handling (<10s gets only 20% allocation)
+- All existing tests continue to pass (10/11, with 1 pre-existing tactical test failure unrelated to time management)

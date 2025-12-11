@@ -105,7 +105,7 @@ public class BestMoveCalculator {
             
             // Compute time budget
             int yourTime = Math.max(0, yourTimeMs);
-            long budgetMs = computeTimeBudget(yourTime, incrementMs);
+            long budgetMs = computeTimeBudget(searchBoard, yourTime, incrementMs);
             if (yourTime < 5000) {
                 // Low time aggression: cap to 1-2 shallow iterations
                 budgetMs = Math.min(budgetMs, 150L);
@@ -145,9 +145,87 @@ public class BestMoveCalculator {
         }
     }
 
-    private static long computeTimeBudget(int remainingMs, int incMs) {
-        long budget = remainingMs / 20L + 3L * incMs;  // Changed from /40 to /20 for more time
-        return Math.max(50L, Math.min(budget, Math.max(100L, remainingMs / 2L)));
+    /**
+     * Dynamic time allocation based on remaining time, increment, and game phase.
+     * Allocates more time in critical middlegame positions and less in opening/endgame.
+     */
+    private long computeTimeBudget(Board board, int remainingMs, int incMs) {
+        // Estimate moves remaining until time control (assume 40 moves or end of game)
+        // Note: board.getBackup() tracks moves made during THIS session, not total game moves.
+        // For positions loaded from FEN (tests), this will be 0, so we use a conservative default.
+        int moveNumber = board.getBackup().size() / 2; // Approximate move number in this session
+        
+        // If no moves in backup (FEN position or fresh start), assume we're at move 20 (mid-game)
+        // This gives reasonable time allocation for test positions
+        if (moveNumber == 0) {
+            moveNumber = 20;
+        }
+        
+        int estimatedMovesRemaining = Math.max(10, 40 - moveNumber);
+        
+        // Detect game phase based on material count
+        int totalPieceCount = countPieces(board);
+        GamePhase phase = detectGamePhase(totalPieceCount);
+        
+        // Base allocation: divide remaining time by estimated moves, plus increment
+        long baseAllocation = remainingMs / Math.max(1, estimatedMovesRemaining) + incMs;
+        
+        // Apply phase-dependent multiplier
+        double phaseMultiplier = switch (phase) {
+            case OPENING -> 0.5;      // Use less time in opening (rely on book/theory)
+            case MIDDLEGAME -> 1.5;   // Use more time in complex middlegame
+            case ENDGAME -> 1.0;      // Normal time in endgame
+        };
+        
+        long budget = (long) (baseAllocation * phaseMultiplier);
+        
+        // Safety bounds: never use less than 50ms, never more than 40% of remaining time
+        long minBudget = 50L;
+        long maxBudget = Math.max(100L, remainingMs * 2L / 5L); // 40% max
+        
+        // Extra conservatism in time trouble (< 10 seconds)
+        if (remainingMs < 10000) {
+            maxBudget = Math.min(maxBudget, remainingMs / 5L); // Only use 20% in time trouble
+        }
+        
+        return Math.max(minBudget, Math.min(budget, maxBudget));
+    }
+    
+    /**
+     * Count total number of pieces on the board (excluding kings).
+     */
+    private int countPieces(Board board) {
+        int count = 0;
+        for (Square square : Square.values()) {
+            if (square == Square.NONE) continue;
+            Piece piece = board.getPiece(square);
+            if (piece != Piece.NONE && piece.getPieceType() != com.github.bhlangonijr.chesslib.PieceType.KING) {
+                count++;
+            }
+        }
+        return count;
+    }
+    
+    /**
+     * Detect game phase based on piece count.
+     */
+    private GamePhase detectGamePhase(int pieceCount) {
+        if (pieceCount >= 24) {
+            return GamePhase.OPENING;     // Most pieces still on board
+        } else if (pieceCount >= 12) {
+            return GamePhase.MIDDLEGAME;  // Some pieces traded
+        } else {
+            return GamePhase.ENDGAME;     // Few pieces remaining
+        }
+    }
+    
+    /**
+     * Game phase enumeration.
+     */
+    private enum GamePhase {
+        OPENING,
+        MIDDLEGAME,
+        ENDGAME
     }
 
 
@@ -159,8 +237,10 @@ public class BestMoveCalculator {
         // Clear position history for new game
         positionHistory.clear();
         
-        // Optionally clear transposition table (can keep it for analysis positions)
-        // For now, keeping TT between moves but clearing history
+        // Clear transposition table to avoid contamination between searches
+        for (int i = 0; i < TT_SIZE; i++) {
+            transpositionTable[i] = new TranspositionTableEntry();
+        }
     }
 
     private String moveToLAN(Move move) {
@@ -343,7 +423,8 @@ public class BestMoveCalculator {
         
         for (Move move : legalMoves) {
             board.doMove(move);
-            positionHistory.add(positionHash);
+            long newPositionHash = zobristHash.computeHash(board);
+            positionHistory.add(newPositionHash);
             
             int score = -alphaBeta(board, depth - 1, -beta, -alpha, ply + 1);
             
