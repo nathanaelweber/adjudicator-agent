@@ -13,7 +13,8 @@ import org.slf4j.LoggerFactory;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
-import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class BestMoveCalculator {
     private static final Logger LOGGER = LoggerFactory.getLogger(BestMoveCalculator.class);
@@ -140,31 +141,67 @@ public class BestMoveCalculator {
                 int iterationBestScore = -CHECKMATE_SCORE;
                 Move iterationBestMove = localBest;
 
-                for (int i = 0; i < rootMoves.size(); i++) {
-                    Move move = rootMoves.get(i);
-                    if (timeExceeded()) break;
-
-                    searchBoard.doMove(move);
-                    
-                    // Check if the moved piece is now hanging (attacked and not adequately defended)
-                    int hangingPenalty = getMovedPieceHangingPenalty(move, searchBoard);
-                    
-                    int score = -alphaBeta(depth - 1, -beta, -alpha, false, 1, searchBoard);
-                    
-                    // Apply hanging penalty to discourage leaving pieces hanging
-                    score -= hangingPenalty;
-                    
-                    searchBoard.undoMove();
-
-                    LOGGER.debug("[{}] Depth {} move {} score {} hangingPenalty {}", name, depth, moveToLAN(move), score, hangingPenalty);
-
-                    if (score > iterationBestScore) {
-                        iterationBestScore = score;
-                        iterationBestMove = move;
+                // Create a thread for each legal move
+                ExecutorService executor = Executors.newFixedThreadPool(rootMoves.size());
+                List<Future<MoveScore>> futures = new ArrayList<>();
+                final int currentDepth = depth;
+                final int currentAlpha = alpha;
+                final int currentBeta = beta;
+                
+                for (Move move : rootMoves) {
+                    Future<MoveScore> future = executor.submit(() -> {
+                        if (timeExceeded()) {
+                            return new MoveScore(move, -CHECKMATE_SCORE, 0);
+                        }
+                        
+                        // Clone the board for thread-safety
+                        Board threadBoard = searchBoard.clone();
+                        threadBoard.doMove(move);
+                        
+                        // Check if the moved piece is now hanging (attacked and not adequately defended)
+                        int hangingPenalty = getMovedPieceHangingPenalty(move, threadBoard);
+                        
+                        int score = -alphaBeta(currentDepth - 1, -currentBeta, -currentAlpha, false, 1, threadBoard);
+                        
+                        // Apply hanging penalty to discourage leaving pieces hanging
+                        score -= hangingPenalty;
+                        
+                        threadBoard.undoMove();
+                        
+                        LOGGER.debug("[{}] Depth {} move {} score {} hangingPenalty {}", name, currentDepth, moveToLAN(move), score, hangingPenalty);
+                        
+                        return new MoveScore(move, score, hangingPenalty);
+                    });
+                    futures.add(future);
+                }
+                
+                // Collect results from all threads and compare scores
+                for (Future<MoveScore> future : futures) {
+                    try {
+                        MoveScore result = future.get();
+                        int score = result.score;
+                        Move move = result.move;
+                        
+                        if (score > iterationBestScore) {
+                            iterationBestScore = score;
+                            iterationBestMove = move;
+                        }
+                        if (score > alpha) {
+                            alpha = score;
+                        }
+                    } catch (InterruptedException | ExecutionException e) {
+                        LOGGER.error("[{}] Error evaluating move in thread", name, e);
                     }
-                    if (score > alpha) {
-                        alpha = score;
+                }
+                
+                executor.shutdown();
+                try {
+                    if (!executor.awaitTermination(budgetMs, TimeUnit.MILLISECONDS)) {
+                        executor.shutdownNow();
                     }
+                } catch (InterruptedException e) {
+                    executor.shutdownNow();
+                    Thread.currentThread().interrupt();
                 }
 
                 if (!timeUp && iterationBestMove != null) {
@@ -205,6 +242,20 @@ public class BestMoveCalculator {
         }
     }
 
+
+    // =============== MoveScore ==================
+    
+    private static class MoveScore {
+        final Move move;
+        final int score;
+        final int hangingPenalty;
+        
+        MoveScore(Move move, int score, int hangingPenalty) {
+            this.move = move;
+            this.score = score;
+            this.hangingPenalty = hangingPenalty;
+        }
+    }
 
     // =============== TT ==================
 
