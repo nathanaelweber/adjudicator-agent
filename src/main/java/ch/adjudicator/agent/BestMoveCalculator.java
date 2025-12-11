@@ -510,12 +510,27 @@ public class BestMoveCalculator {
         if (standPat >= beta) return beta;
         if (standPat > alpha) alpha = standPat;
 
-        List<Move> moves = searchBoard.legalMoves();
-        // Consider only captures and promotions in QS
+        // Generate only noisy moves (captures + promotions) directly
         List<Move> noisy = new ArrayList<>();
-        for (Move m : moves) {
-            if (isCapture(m, searchBoard) || isPromotion(m)) noisy.add(m);
+        
+        // Get all legal moves first to ensure legality
+        List<Move> allLegal = searchBoard.legalMoves();
+        
+        // Add legal captures using pseudo-legal captures as candidates
+        List<Move> pseudoCaptures = searchBoard.pseudoLegalCaptures();
+        for (Move m : pseudoCaptures) {
+            if (allLegal.contains(m)) {
+                noisy.add(m);
+            }
         }
+        
+        // Add promotion moves that are not already in noisy list
+        for (Move m : allLegal) {
+            if (isPromotion(m) && !noisy.contains(m)) {
+                noisy.add(m);
+            }
+        }
+        
         // Order captures by MVV/LVA
         noisy.sort((a, b) -> Integer.compare(mvvLvaScore(b, searchBoard), mvvLvaScore(a, searchBoard)));
 
@@ -607,6 +622,48 @@ public class BestMoveCalculator {
 
     // =============== EVALUATION ==================
 
+    /**
+     * Efficiently evaluate a piece type using bitboard iteration.
+     * Instead of checking all 64 squares, iterate only over set bits in the bitboard.
+     * 
+     * @param searchBoard The board to evaluate
+     * @param piece The piece type to evaluate
+     * @param materialValue Material value for this piece (0 if only calculating PST)
+     * @param pstTable PST table to use
+     * @param side Side for PST calculation (WHITE or BLACK)
+     * @param pstOnly If true, only calculate PST value; if false, only calculate material
+     * @return Sum of material or PST values for all pieces of this type
+     */
+    private int evaluatePieceBitboard(Board searchBoard, Piece piece, int materialValue, 
+                                      int[] pstTable, Side side, boolean pstOnly) {
+        long bitboard = searchBoard.getBitboard(piece);
+        int sum = 0;
+        
+        // Iterate through set bits using bit manipulation
+        while (bitboard != 0) {
+            // Get index of least significant bit (LSB)
+            int squareIndex = Long.numberOfTrailingZeros(bitboard);
+            
+            if (pstOnly) {
+                // Calculate PST value
+                if (side == Side.WHITE) {
+                    sum += pstTable[squareIndex];
+                } else {
+                    // Black pieces: flip the index
+                    sum += PST.flip(pstTable, squareIndex);
+                }
+            } else {
+                // Calculate material value
+                sum += materialValue;
+            }
+            
+            // Clear the LSB
+            bitboard &= bitboard - 1;
+        }
+        
+        return sum;
+    }
+
     private int evaluate(Board searchBoard) {
         // Perspective: score is from side to move's perspective relative to our color
         int materialWhite = 0;
@@ -616,29 +673,42 @@ public class BestMoveCalculator {
         int mobilityWhite = 0;
         int mobilityBlack = 0;
 
-        // Material and PST
-        for (Square sq : Square.values()) {
-            Piece p = searchBoard.getPiece(sq);
-            if (p == Piece.NONE) continue;
-            int pv = pieceValue(p);
-            int idx = squareToIndex(sq, Side.WHITE); // 0..63 from White's POV
-            switch (p) {
-                case WHITE_PAWN -> { materialWhite += pv; pstWhite += PST.PAWN_MG[idx]; }
-                case WHITE_KNIGHT -> { materialWhite += pv; pstWhite += PST.KNIGHT_MG[idx]; }
-                case WHITE_BISHOP -> { materialWhite += pv; pstWhite += PST.BISHOP_MG[idx]; }
-                case WHITE_ROOK -> { materialWhite += pv; pstWhite += PST.ROOK_MG[idx]; }
-                case WHITE_QUEEN -> { materialWhite += QUEEN; pstWhite += PST.QUEEN_MG[idx]; }
-                case WHITE_KING -> { pstWhite += PST.KING_MG[idx]; }
-
-                case BLACK_PAWN -> { materialBlack += PAWN; pstBlack += PST.flip(PST.PAWN_MG, idx); }
-                case BLACK_KNIGHT -> { materialBlack += KNIGHT; pstBlack += PST.flip(PST.KNIGHT_MG, idx); }
-                case BLACK_BISHOP -> { materialBlack += BISHOP; pstBlack += PST.flip(PST.BISHOP_MG, idx); }
-                case BLACK_ROOK -> { materialBlack += ROOK; pstBlack += PST.flip(PST.ROOK_MG, idx); }
-                case BLACK_QUEEN -> { materialBlack += QUEEN; pstBlack += PST.flip(PST.QUEEN_MG, idx); }
-                case BLACK_KING -> { pstBlack += PST.flip(PST.KING_MG, idx); }
-                default -> {}
-            }
-        }
+        // Material and PST using bitboard iteration
+        // White pieces
+        materialWhite += evaluatePieceBitboard(searchBoard, Piece.WHITE_PAWN, PAWN, PST.PAWN_MG, Side.WHITE, false);
+        pstWhite += evaluatePieceBitboard(searchBoard, Piece.WHITE_PAWN, 0, PST.PAWN_MG, Side.WHITE, true);
+        
+        materialWhite += evaluatePieceBitboard(searchBoard, Piece.WHITE_KNIGHT, KNIGHT, PST.KNIGHT_MG, Side.WHITE, false);
+        pstWhite += evaluatePieceBitboard(searchBoard, Piece.WHITE_KNIGHT, 0, PST.KNIGHT_MG, Side.WHITE, true);
+        
+        materialWhite += evaluatePieceBitboard(searchBoard, Piece.WHITE_BISHOP, BISHOP, PST.BISHOP_MG, Side.WHITE, false);
+        pstWhite += evaluatePieceBitboard(searchBoard, Piece.WHITE_BISHOP, 0, PST.BISHOP_MG, Side.WHITE, true);
+        
+        materialWhite += evaluatePieceBitboard(searchBoard, Piece.WHITE_ROOK, ROOK, PST.ROOK_MG, Side.WHITE, false);
+        pstWhite += evaluatePieceBitboard(searchBoard, Piece.WHITE_ROOK, 0, PST.ROOK_MG, Side.WHITE, true);
+        
+        materialWhite += evaluatePieceBitboard(searchBoard, Piece.WHITE_QUEEN, QUEEN, PST.QUEEN_MG, Side.WHITE, false);
+        pstWhite += evaluatePieceBitboard(searchBoard, Piece.WHITE_QUEEN, 0, PST.QUEEN_MG, Side.WHITE, true);
+        
+        pstWhite += evaluatePieceBitboard(searchBoard, Piece.WHITE_KING, 0, PST.KING_MG, Side.WHITE, true);
+        
+        // Black pieces
+        materialBlack += evaluatePieceBitboard(searchBoard, Piece.BLACK_PAWN, PAWN, PST.PAWN_MG, Side.BLACK, false);
+        pstBlack += evaluatePieceBitboard(searchBoard, Piece.BLACK_PAWN, 0, PST.PAWN_MG, Side.BLACK, true);
+        
+        materialBlack += evaluatePieceBitboard(searchBoard, Piece.BLACK_KNIGHT, KNIGHT, PST.KNIGHT_MG, Side.BLACK, false);
+        pstBlack += evaluatePieceBitboard(searchBoard, Piece.BLACK_KNIGHT, 0, PST.KNIGHT_MG, Side.BLACK, true);
+        
+        materialBlack += evaluatePieceBitboard(searchBoard, Piece.BLACK_BISHOP, BISHOP, PST.BISHOP_MG, Side.BLACK, false);
+        pstBlack += evaluatePieceBitboard(searchBoard, Piece.BLACK_BISHOP, 0, PST.BISHOP_MG, Side.BLACK, true);
+        
+        materialBlack += evaluatePieceBitboard(searchBoard, Piece.BLACK_ROOK, ROOK, PST.ROOK_MG, Side.BLACK, false);
+        pstBlack += evaluatePieceBitboard(searchBoard, Piece.BLACK_ROOK, 0, PST.ROOK_MG, Side.BLACK, true);
+        
+        materialBlack += evaluatePieceBitboard(searchBoard, Piece.BLACK_QUEEN, QUEEN, PST.QUEEN_MG, Side.BLACK, false);
+        pstBlack += evaluatePieceBitboard(searchBoard, Piece.BLACK_QUEEN, 0, PST.QUEEN_MG, Side.BLACK, true);
+        
+        pstBlack += evaluatePieceBitboard(searchBoard, Piece.BLACK_KING, 0, PST.KING_MG, Side.BLACK, true);
 
         // Mobility: rough count for side to move only (optimization)
         Side stm = searchBoard.getSideToMove();
@@ -710,40 +780,48 @@ public class BestMoveCalculator {
 
     /**
      * Optimized version that only penalizes pieces that are attacked and have NO defenders at all.
-     * This is much faster than checking attacker/defender counts.
+     * Uses bitboard iteration to check only occupied squares for the given side.
      */
     private int detectHangingPiecesOptimized(Side side, Board searchBoard) {
         int hangingPenalty = 0;
         Side opponent = (side == Side.WHITE) ? Side.BLACK : Side.WHITE;
         
-        for (Square sq : Square.values()) {
-            Piece piece = searchBoard.getPiece(sq);
-            if (piece == Piece.NONE) continue;
+        // Get bitboard for all pieces of the given side
+        long sideBitboard = searchBoard.getBitboard(side);
+        
+        // Iterate through set bits using bit manipulation
+        while (sideBitboard != 0) {
+            // Get index of least significant bit (LSB)
+            int squareIndex = Long.numberOfTrailingZeros(sideBitboard);
+            Square sq = Square.squareAt(squareIndex);
             
-            // Check if this piece belongs to the side we're evaluating
-            if (piece.getPieceSide() != side) continue;
+            Piece piece = searchBoard.getPiece(sq);
             
             // Skip kings
-            if (piece == Piece.WHITE_KING || piece == Piece.BLACK_KING) continue;
-            
-            // Check if attacked by opponent
-            long attackers = searchBoard.squareAttackedBy(sq, opponent);
-            if (attackers == 0) continue;
-            
-            // Check if defended by our side
-            long defenders = searchBoard.squareAttackedBy(sq, side);
-            
-            // Only penalize if completely undefended
-            if (defenders == 0) {
-                hangingPenalty += pieceValue(piece);
+            if (piece != Piece.WHITE_KING && piece != Piece.BLACK_KING) {
+                // Check if attacked by opponent
+                long attackers = searchBoard.squareAttackedBy(sq, opponent);
+                
+                if (attackers != 0) {
+                    // Check if defended by our side
+                    long defenders = searchBoard.squareAttackedBy(sq, side);
+                    
+                    // Only penalize if completely undefended
+                    if (defenders == 0) {
+                        hangingPenalty += pieceValue(piece);
+                    }
+                }
             }
+            
+            // Clear the LSB
+            sideBitboard &= sideBitboard - 1;
         }
         
         return hangingPenalty;
     }
 
     /**
-     * Detects hanging pieces for a given side.
+     * Detects hanging pieces for a given side using bitboard iteration.
      * A piece is considered hanging if:
      * 1. It is attacked by opponent pieces
      * 2. It is not defended, OR the number of attackers > number of defenders
@@ -754,59 +832,57 @@ public class BestMoveCalculator {
         int hangingPenalty = 0;
         Side opponent = (side == Side.WHITE) ? Side.BLACK : Side.WHITE;
         
-        for (Square sq : Square.values()) {
+        // Get bitboard for all pieces of the given side
+        long sideBitboard = searchBoard.getBitboard(side);
+        
+        // Iterate through set bits using bit manipulation
+        while (sideBitboard != 0) {
+            // Get index of least significant bit (LSB)
+            int squareIndex = Long.numberOfTrailingZeros(sideBitboard);
+            Square sq = Square.squareAt(squareIndex);
+            
             Piece piece = searchBoard.getPiece(sq);
-            if (piece == Piece.NONE) continue;
-            
-            // Check if this piece belongs to the side we're evaluating
-            boolean isPieceBelongsToSide = (side == Side.WHITE && piece.getPieceSide() == Side.WHITE)
-                    || (side == Side.BLACK && piece.getPieceSide() == Side.BLACK);
-            
-            if (!isPieceBelongsToSide) continue;
             
             // Skip kings - they can't be "hanging" in the traditional sense
-            if (piece == Piece.WHITE_KING || piece == Piece.BLACK_KING) continue;
-            
-            // Count attackers from opponent
-            long attackers = searchBoard.squareAttackedBy(sq, opponent);
-            int attackerCount = Long.bitCount(attackers);
-            
-            if (attackerCount == 0) continue; // Not attacked, not hanging
-            
-            // Count defenders from our side
-            long defenders = searchBoard.squareAttackedBy(sq, side);
-            int defenderCount = Long.bitCount(defenders);
-            
-            // Piece is hanging if attacked and not defended, or more attackers than defenders
-            if (defenderCount == 0) {
-                // Completely undefended piece that is attacked - full penalty
-                hangingPenalty += pieceValue(piece);
-            } else if (attackerCount > defenderCount) {
-                // More attackers than defenders - partial penalty (50% of piece value)
-                hangingPenalty += pieceValue(piece) / 2;
+            if (piece != Piece.WHITE_KING && piece != Piece.BLACK_KING) {
+                // Count attackers from opponent
+                long attackers = searchBoard.squareAttackedBy(sq, opponent);
+                int attackerCount = Long.bitCount(attackers);
+                
+                if (attackerCount > 0) {
+                    // Count defenders from our side
+                    long defenders = searchBoard.squareAttackedBy(sq, side);
+                    int defenderCount = Long.bitCount(defenders);
+                    
+                    // Piece is hanging if attacked and not defended, or more attackers than defenders
+                    if (defenderCount == 0) {
+                        // Completely undefended piece that is attacked - full penalty
+                        hangingPenalty += pieceValue(piece);
+                    } else if (attackerCount > defenderCount) {
+                        // More attackers than defenders - partial penalty (50% of piece value)
+                        hangingPenalty += pieceValue(piece) / 2;
+                    }
+                }
             }
+            
+            // Clear the LSB
+            sideBitboard &= sideBitboard - 1;
         }
         
         return hangingPenalty;
     }
 
     private Square findKing(Side color, Board searchBoard) {
-        for (Square sq : Square.values()) {
-            Piece p = searchBoard.getPiece(sq);
-            if (color == Side.WHITE && p == Piece.WHITE_KING) return sq;
-            if (color == Side.BLACK && p == Piece.BLACK_KING) return sq;
-        }
-        return Square.NONE;
+        // Use bitboard-based method for direct king location
+        Square kingSquare = searchBoard.getKingSquare(color);
+        return kingSquare != null ? kingSquare : Square.NONE;
     }
 
     private int countPawns(Side color, Board searchBoard) {
-        int c = 0;
-        for (Square sq : Square.values()) {
-            Piece p = searchBoard.getPiece(sq);
-            if (color == Side.WHITE && p == Piece.WHITE_PAWN) c++;
-            if (color == Side.BLACK && p == Piece.BLACK_PAWN) c++;
-        }
-        return c;
+        // Use bitboard-based counting with Long.bitCount
+        Piece pawn = (color == Side.WHITE) ? Piece.WHITE_PAWN : Piece.BLACK_PAWN;
+        long pawnBitboard = searchBoard.getBitboard(pawn);
+        return Long.bitCount(pawnBitboard);
     }
 
     private int squareToIndex(Square sq, Side pov) {
