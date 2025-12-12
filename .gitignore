@@ -4,3 +4,5 @@
 /buf.lock
 agent.env
 logs
+.run
+*.txt

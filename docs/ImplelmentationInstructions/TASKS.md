@@ -68,6 +68,7 @@ Focus on maximizing engine playing strength and resource efficiency.
 
 | Status | Task | Sub-Task | Best Possible Implementation Steps |
 | :---: | :--- | :--- | :--- |
+| [✓] | **Positional Piece Evaluation** | Piece-Square Tables (PST) | Implemented positional bonuses based on chess theory. Modified `getPieceValue()` to accept Square parameter and added `getPositionalBonus()` method with piece-square tables for all piece types (pawns gain value advancing, knights prefer center, bishops/rooks/queens have positional preferences, kings prefer safety). |
 | [ ] | **Advanced Static Evaluation** | Pawn Structure (passed, doubled, isolated) | Use **fast bitboard operations** (e.g., `popcount()`, bitwise shifts) on pawn bitboards for rapid analysis. |
 | [ ] | | King Safety (pawn shields, attack presence) | Generate attack maps and check intersections with king safety zones defined by bitmasks. |
 | [ ] | | Piece Mobility and Influence | Use bitboards to quickly calculate legal/attacked squares for a piece type and score based on the count. |
