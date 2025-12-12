@@ -494,7 +494,7 @@ public class BestMoveCalculator {
         if (legalMoves.isEmpty()) {
             if (board.isKingAttacked()) {
                 // Checkmate - return negative score (we're checkmated)
-                return -CHECKMATE_SCORE + ply;
+                return -CHECKMATE_SCORE - ply;
             } else {
                 // Stalemate
                 return DRAW_SCORE;
