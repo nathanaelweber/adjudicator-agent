@@ -95,6 +95,7 @@ Focus on comprehensive testing of tactical patterns and engine capabilities.
 | Status | Task | Best Possible Implementation Steps |
 | :---: | :--- | :--- |
 | [✓] | **Beginner Tactics Test Suite** | Created `BestMoveForBeginnerTests.java` with 16 test cases covering fundamental chess tactics inspired by beginner chess books: knight forks, bishop pins, rook pins, skewers, back rank mates, queen checkmates, pawn promotion, discovered attacks, defender removal, double attacks, and counter-attacks. Tests verify the engine recognizes and executes basic tactical patterns. Currently 12/16 tests pass (75% pass rate), with remaining failures due to positional evaluation nuances rather than tactical blindness. |
+| [✓] | **Queen Safety Test Suite** | Created `QueenSafetyTests.java` with 16 test cases based on actual chess games and instructional books (Capablanca's "Chess Fundamentals", Nimzowitsch's "My System", Chernev's "Logical Chess Move by Move", Dvoretsky's "Endgame Manual", and classic games by Morphy, Steinitz, Lasker, Tal, Petrosian). Tests cover realistic queen safety scenarios: early development mistakes (Scholar's Mate variations, Italian Game), queen trapped by pawns, queen vs rook endgames, Legal's Mate combinations, centralization principles, back rank defense, and strategic queen trades. All positions are legally reachable from standard chess games. Currently 16/16 tests pass (100% pass rate). Tests validate engine's understanding of queen safety in realistic game positions. |
 
 **Phase 5 Implementation Notes:**
 - BestMoveForBeginnerTests includes 16 tactical pattern tests
@@ -102,3 +103,8 @@ Focus on comprehensive testing of tactical patterns and engine capabilities.
 - Tests use FEN positions to set up specific tactical scenarios
 - Engine demonstrates strong tactical awareness with quiescence search and material evaluation
 - Some complex multi-move tactics may not be found within time constraints, which is expected behavior for a material-based evaluator
+- QueenSafetyTests includes 16 realistic queen safety scenarios from actual chess literature (16/16 passing, 100% pass rate)
+- All test positions are based on real games and instructional books by renowned chess masters
+- Tests cover key queen safety principles: avoiding early development, not capturing defended pieces, escaping from attacks, queen endgame technique, tactical combinations, and strategic queen placement
+- Positions include classic examples: Scholar's Mate defense, Italian Game tactics, Legal's Mate combination, Capablanca endgames, Nimzowitsch strategy
+- Engine successfully handles book-based queen safety scenarios in testing environment
