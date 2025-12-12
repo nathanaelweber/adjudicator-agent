@@ -37,8 +37,7 @@ class BestMoveForBeginnerTests {
         
         assertNotNull(bestMove, "Should find tactic to win rook");
         // Knight should capture the rook or create winning position
-        assertTrue(bestMove.getFrom().toString().toUpperCase().equals("C4"),
-                "Knight should move to win material");
+        assertEquals("C4", bestMove.getFrom().toString().toUpperCase(), "Knight should move to win material");
     }
 
     @Test

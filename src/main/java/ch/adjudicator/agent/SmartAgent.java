@@ -155,32 +155,34 @@ public class SmartAgent implements Agent {
 
     // =============== Main launcher (optional) ==================
     public static void main(String[] args) {
-        AgentConfiguration config = new AgentConfiguration(args);
-        try {
-            config.validate();
-        } catch (IllegalArgumentException e) {
-            System.err.println(e.getMessage());
-            System.exit(1);
-        }
-        GameMode mode;
-        try {
-            mode = GameMode.valueOf(config.getMode());
-        } catch (IllegalArgumentException e) {
-            System.err.println("Invalid game mode: " + config.getMode());
-            System.err.println("Valid modes: TRAINING, OPEN, RANKED");
-            System.exit(1);
-            return;
-        }
+        while (true) {
+            AgentConfiguration config = new AgentConfiguration(args);
+            try {
+                config.validate();
+            } catch (IllegalArgumentException e) {
+                System.err.println(e.getMessage());
+                System.exit(1);
+            }
+            GameMode mode;
+            try {
+                mode = GameMode.valueOf(config.getMode());
+            } catch (IllegalArgumentException e) {
+                System.err.println("Invalid game mode: " + config.getMode());
+                System.err.println("Valid modes: TRAINING, OPEN, RANKED");
+                System.exit(1);
+                return;
+            }
 
-        LOGGER.info("Starting {} (SmartAgent)...", config.getAgentName());
-        AdjudicatorClient client = new AdjudicatorClient(config.getServerAddress(), config.getApiKey(), true);
-        SmartAgent agent = new SmartAgent(config.getAgentName());
-        try {
-            client.playGame(agent, mode, config.getTimeControl());
-            LOGGER.info("SmartAgent finished successfully");
-        } catch (Exception e) {
-            LOGGER.error("Game error", e);
-            System.exit(1);
+            LOGGER.info("Starting {} (SmartAgent)...", config.getAgentName());
+            AdjudicatorClient client = new AdjudicatorClient(config.getServerAddress(), config.getApiKey(), true);
+            SmartAgent agent = new SmartAgent(config.getAgentName());
+            try {
+                client.playGame(agent, mode, config.getTimeControl());
+                LOGGER.info("SmartAgent finished successfully");
+            } catch (Exception e) {
+                LOGGER.error("Game error", e);
+                System.exit(1);
+            }
         }
     }
 }
