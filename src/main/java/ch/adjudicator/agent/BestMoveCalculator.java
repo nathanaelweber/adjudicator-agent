@@ -1,5 +1,7 @@
 package ch.adjudicator.agent;
 
+import ch.adjudicator.agent.positionevaluation.Score;
+import ch.adjudicator.agent.positionevaluation.ZobristHash;
 import ch.adjudicator.client.GameInfo;
 import com.github.bhlangonijr.chesslib.Board;
 import com.github.bhlangonijr.chesslib.Piece;
@@ -251,7 +253,7 @@ public class BestMoveCalculator {
      * Evaluate the board position from the perspective of the side to move.
      * Positive scores favor the side to move, negative scores favor the opponent.
      */
-    private int evaluate(Board board) {
+    private Score evaluate(Board board) {
         int score = 0;
         Side sideToMove = board.getSideToMove();
         
@@ -272,7 +274,7 @@ public class BestMoveCalculator {
             }
         }
         
-        return score;
+        return Score.valueOf(score);
     }
 
     /**
@@ -385,17 +387,18 @@ public class BestMoveCalculator {
         }
     }
 
+
     /**
      * Quiescence search to handle tactical sequences (captures).
      */
-    private int quiescence(Board board, int alpha, int beta, int ply) {
+    private Score quiescence(Board board, Score alpha, Score beta, int ply) {
         // Stand-pat score
-        int standPat = evaluate(board);
+        Score standPat = evaluate(board);
         
-        if (standPat >= beta) {
+        if (standPat.compareTo(beta) >= 0) {
             return beta;
         }
-        if (alpha < standPat) {
+        if (alpha.compareTo(standPat) < 0) {
             alpha = standPat;
         }
         
@@ -423,13 +426,13 @@ public class BestMoveCalculator {
         
         for (Move move : tacticalMoves) {
             board.doMove(move);
-            int score = -quiescence(board, -beta, -alpha, ply + 1);
+            Score score = quiescence(board, beta.negate(), alpha.negate(), ply + 1).negate();
             board.undoMove();
             
-            if (score >= beta) {
+            if (score.compareTo(beta) >= 0) {
                 return beta;
             }
-            if (score > alpha) {
+            if (score.compareTo(alpha) > 0) {
                 alpha = score;
             }
         }
@@ -464,15 +467,15 @@ public class BestMoveCalculator {
     /**
      * Alpha-beta search with a fixed depth.
      */
-    private int alphaBeta(Board board, int depth, int alpha, int beta, int ply) {
-        int alphaOrig = alpha;
+    private Score alphaBeta(Board board, int depth, Score alpha, Score beta, int ply) {
+        Score alphaOrig = alpha;
         
         // Compute position hash
         long positionHash = zobristHash.computeHash(board);
         
         // Check for repetition (3-fold repetition is a draw)
         if (isRepetition(positionHash)) {
-            return DRAW_SCORE;
+            return Score.valueOf(DRAW_SCORE);
         }
         
         // Transposition table lookup
@@ -480,11 +483,12 @@ public class BestMoveCalculator {
         TranspositionTableEntry ttEntry = transpositionTable[ttIndex];
         
         if (ttEntry.isValid(positionHash, depth)) {
+            Score ttScore = Score.fromInt(ttEntry.score);
             if (ttEntry.nodeType == TT_EXACT) {
-                return ttEntry.score;
-            } else if (ttEntry.nodeType == TT_ALPHA && ttEntry.score <= alpha) {
+                return ttScore;
+            } else if (ttEntry.nodeType == TT_ALPHA && ttScore.compareTo(alpha) <= 0) {
                 return alpha;
-            } else if (ttEntry.nodeType == TT_BETA && ttEntry.score >= beta) {
+            } else if (ttEntry.nodeType == TT_BETA && ttScore.compareTo(beta) >= 0) {
                 return beta;
             }
         }
@@ -493,11 +497,12 @@ public class BestMoveCalculator {
         List<Move> legalMoves = board.legalMoves();
         if (legalMoves.isEmpty()) {
             if (board.isKingAttacked()) {
-                // Checkmate - return negative score (we're checkmated)
-                return -CHECKMATE_SCORE - ply;
+                // Checkmate - we are getting mated at this position
+                // Return losing mate score with distance = ply from root
+                return Score.mateInPly(ply, false);
             } else {
                 // Stalemate
-                return DRAW_SCORE;
+                return Score.valueOf(DRAW_SCORE);
             }
         }
         
@@ -513,7 +518,7 @@ public class BestMoveCalculator {
             legalMoves.add(0, ttMove);
         }
         
-        int bestScore = -CHECKMATE_SCORE - 1000;
+        Score bestScore = Score.valueOf(-Score.MATE_SCORE - 1000);
         Move bestMove = null;
         
         for (Move move : legalMoves) {
@@ -521,33 +526,47 @@ public class BestMoveCalculator {
             long newPositionHash = zobristHash.computeHash(board);
             positionHistory.add(newPositionHash);
             
-            int score = -alphaBeta(board, depth - 1, -beta, -alpha, ply + 1);
+            Score score = alphaBeta(board, depth - 1, beta.negate(), alpha.negate(), ply + 1).negate();
             
             positionHistory.remove(positionHistory.size() - 1);
             board.undoMove();
             
-            if (score > bestScore) {
+            if (score.compareTo(bestScore) > 0) {
                 bestScore = score;
                 bestMove = move;
             }
             
-            alpha = Math.max(alpha, score);
-            
-            if (alpha >= beta) {
-                break; // Beta cutoff
+            if (score.compareTo(alpha) > 0) {
+                alpha = score;
             }
+            
+            // Beta cutoff - prune this branch
+            if (alpha.compareTo(beta) >= 0) {
+                break;
+            }
+            
+            // If we found a winning mate, we can stop searching deeper in this branch
+            // (all other moves will be evaluated, but we know we have a forced win)
+            if (bestScore.isWinningMate()) {
+                // Continue to find the shortest mate among siblings
+            }
+        }
+        
+        // Increment mate distance when propagating up the tree
+        if (bestScore.isMate()) {
+            bestScore = bestScore.incrementMateDistance();
         }
         
         // Store in transposition table
         byte nodeType;
-        if (bestScore <= alphaOrig) {
+        if (bestScore.compareTo(alphaOrig) <= 0) {
             nodeType = TT_ALPHA;
-        } else if (bestScore >= beta) {
+        } else if (bestScore.compareTo(beta) >= 0) {
             nodeType = TT_BETA;
         } else {
             nodeType = TT_EXACT;
         }
-        ttEntry.store(positionHash, depth, bestScore, bestMove, nodeType);
+        ttEntry.store(positionHash, depth, bestScore.toInt(), bestMove, nodeType);
         
         return bestScore;
     }
@@ -594,26 +613,35 @@ public class BestMoveCalculator {
                 break;
             }
             
-            int bestScore = -CHECKMATE_SCORE - 1000;
+            Score bestScore = Score.valueOf(-Score.MATE_SCORE - 1000);
             Move currentBestMove = bestMove;
-            int alpha = -CHECKMATE_SCORE - 1000;
-            int beta = CHECKMATE_SCORE + 1000;
+            Score alpha = Score.valueOf(-Score.MATE_SCORE - 1000);
+            Score beta = Score.valueOf(Score.MATE_SCORE + 1000);
             
             for (Move move : legalMoves) {
                 board.doMove(move);
-                int score = -alphaBeta(board, depth - 1, -beta, -alpha, 1);
+                Score score = alphaBeta(board, depth - 1, beta.negate(), alpha.negate(), 1).negate();
                 board.undoMove();
                 
-                if (score > bestScore) {
+                if (score.compareTo(bestScore) > 0) {
                     bestScore = score;
                     currentBestMove = move;
                 }
                 
-                alpha = Math.max(alpha, score);
+                if (score.compareTo(alpha) > 0) {
+                    alpha = score;
+                }
                 
                 // Check time
                 elapsed = System.currentTimeMillis() - startTime;
                 if (elapsed >= budgetMs) {
+                    break;
+                }
+                
+                // If we found a forced mate, we can stop searching this depth
+                // (we'll still complete higher depths if time allows to find shorter mates)
+                if (bestScore.isWinningMate()) {
+                    LOGGER.info("[{}] Found forced mate at depth {}: {}", name, depth, bestScore);
                     break;
                 }
             }
@@ -621,6 +649,12 @@ public class BestMoveCalculator {
             bestMove = currentBestMove;
             LOGGER.debug("[{}] Depth {} completed, best move: {}, score: {}", 
                         name, depth, moveToLAN(bestMove), bestScore);
+            
+            // If we found a mate in 1, no need to search deeper
+            if (bestScore.isMate() && bestScore.getMovesToMate() == 1) {
+                LOGGER.info("[{}] Mate in 1 found, stopping search", name);
+                break;
+            }
             
             // Stop if time is up
             elapsed = System.currentTimeMillis() - startTime;
@@ -660,104 +694,6 @@ public class BestMoveCalculator {
         
         boolean isValid(long key, int depth) {
             return this.zobristKey == key && this.depth >= depth;
-        }
-    }
-    
-    /**
-     * Zobrist Hashing for position identification
-     */
-    private static class ZobristHash {
-        private long[][][] pieceKeys; // [piece_type][color][square]
-        private long[] castlingKeys; // 4 castling rights
-        private long[] enPassantKeys; // 8 files
-        private long sideToMoveKey;
-        private Random random;
-        
-        ZobristHash() {
-            random = new Random(123456789L); // Fixed seed for reproducibility
-            pieceKeys = new long[6][2][64];
-            castlingKeys = new long[4];
-            enPassantKeys = new long[8];
-            
-            // Initialize piece keys
-            for (int piece = 0; piece < 6; piece++) {
-                for (int color = 0; color < 2; color++) {
-                    for (int square = 0; square < 64; square++) {
-                        pieceKeys[piece][color][square] = random.nextLong();
-                    }
-                }
-            }
-            
-            // Initialize castling keys
-            for (int i = 0; i < 4; i++) {
-                castlingKeys[i] = random.nextLong();
-            }
-            
-            // Initialize en passant keys
-            for (int i = 0; i < 8; i++) {
-                enPassantKeys[i] = random.nextLong();
-            }
-            
-            sideToMoveKey = random.nextLong();
-        }
-        
-        long computeHash(Board board) {
-            long hash = 0L;
-            
-            // Hash pieces
-            for (Square square : Square.values()) {
-                if (square == Square.NONE) continue;
-                
-                Piece piece = board.getPiece(square);
-                if (piece == Piece.NONE) continue;
-                
-                int pieceType = getPieceTypeIndex(piece);
-                int color = piece.getPieceSide() == Side.WHITE ? 0 : 1;
-                int squareIndex = square.ordinal();
-                
-                hash ^= pieceKeys[pieceType][color][squareIndex];
-            }
-            
-            // Hash castling rights
-            String castleStr = board.getCastleRight(Side.WHITE).toString() +
-                              board.getCastleRight(Side.BLACK).toString();
-            if (castleStr.contains("K")) {
-                hash ^= castlingKeys[0];
-            }
-            if (castleStr.contains("Q")) {
-                hash ^= castlingKeys[1];
-            }
-            if (castleStr.contains("k")) {
-                hash ^= castlingKeys[2];
-            }
-            if (castleStr.contains("q")) {
-                hash ^= castlingKeys[3];
-            }
-            
-            // Hash en passant
-            if (board.getEnPassant() != Square.NONE) {
-                int file = board.getEnPassant().getFile().ordinal();
-                hash ^= enPassantKeys[file];
-            }
-            
-            // Hash side to move
-            if (board.getSideToMove() == Side.BLACK) {
-                hash ^= sideToMoveKey;
-            }
-            
-            return hash;
-        }
-        
-        private int getPieceTypeIndex(Piece piece) {
-            switch (piece.getPieceType()) {
-                case PAWN: return 0;
-                case KNIGHT: return 1;
-                case BISHOP: return 2;
-                case ROOK: return 3;
-                case QUEEN: return 4;
-                case KING: return 5;
-                default: return 0;
-            }
         }
     }
 }
