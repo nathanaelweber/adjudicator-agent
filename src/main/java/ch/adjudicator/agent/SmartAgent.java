@@ -72,7 +72,7 @@ public class SmartAgent implements Agent {
         // Select a random legal move
         Move selectedMove = null;
         try {
-            selectedMove = bestMoveCalculator.computeBestMove(board, request.getYourTimeMs());
+            selectedMove = bestMoveCalculator.computeBestMove(board.clone(), request.getYourTimeMs());
         } catch (Throwable e) {
             LOGGER.warn("[{}] Error while computing best move: {}", name, e.getMessage(), e);
             selectedMove = legalMoves.get(random.nextInt(legalMoves.size()));
@@ -85,6 +85,8 @@ public class SmartAgent implements Agent {
 
         // Apply the move to our board
         board.doMove(selectedMove);
+        // Update the selected move to history, since we need this for draw calculation.
+        bestMoveCalculator.updatePositionHistory(board);
 
         // Convert to Long Algebraic Notation (LAN)
         String moveStr = moveToLAN(selectedMove);

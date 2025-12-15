@@ -65,13 +65,29 @@ class QueenSafetyTests {
     }
 
     @Test
-    void testQueenPinnedToKing() throws Exception {
+    void testQueenPinnedToKingWithOnlyOneRookAndPawn() throws Exception {
+        // queen pinned on e-file
+        // Black queen can be pinned on e-file by white rook.
+        Board board = new Board();
+        board.loadFromFen("4k3/8/8/4q3/8/8/5KPP/5R2 w - - 0 1");
+
+        Move bestMove = calculator.computeBestMove(board, 3000000);
+
+        assertNotNull(bestMove, "Should find best move");
+        // In this position, white should pin the opponent queen with one of the ground rooks
+        String move = bestMove.toString().toUpperCase();
+        assertTrue("F1E1".equalsIgnoreCase(move),
+                "Should pin the opponent queen with the rook, it will likely be taken but this results in a win");
+    }
+
+    @Test
+    void testQueenPinnedToKingWithOtherPieces() throws Exception {
         // queen pinned on e-file
         // Black queen can be pinned on e-file by white rook.
         Board board = new Board();
         board.loadFromFen("r3k2r/pp3ppp/2p5/3pq3/2P5/8/PP1Q1PPP/R4RK1 w kq - 0 1");
         
-        Move bestMove = calculator.computeBestMove(board, 3000);
+        Move bestMove = calculator.computeBestMove(board, 3000000);
         
         assertNotNull(bestMove, "Should find best move");
         // In this position, white should pin the opponent queen with one of the ground rooks

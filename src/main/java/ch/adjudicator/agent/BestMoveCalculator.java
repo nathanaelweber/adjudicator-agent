@@ -220,7 +220,11 @@ public class BestMoveCalculator {
             return GamePhase.ENDGAME;     // Few pieces remaining
         }
     }
-    
+
+    public void updatePositionHistory(Board board) {
+        positionHistory.add(zobristHash.computeHash(board));
+    }
+
     /**
      * Game phase enumeration.
      */
@@ -607,7 +611,7 @@ public class BestMoveCalculator {
         long startTime = System.currentTimeMillis();
         
         // Iterative deepening
-        for (int depth = 1; depth <= 20; depth++) {
+        for (int depth = 1; depth <= 4; depth++) {
             long elapsed = System.currentTimeMillis() - startTime;
             if (elapsed >= budgetMs) {
                 break;
