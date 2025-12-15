@@ -526,7 +526,7 @@ public class BestMoveCalculator {
             long newPositionHash = zobristHash.computeHash(board);
             positionHistory.add(newPositionHash);
             
-            Score score = alphaBeta(board, depth - 1, beta.negate(), alpha.negate(), ply + 1).negate();
+            Score score = alphaBeta(board, depth - 1, alpha.negate(), beta.negate(), ply + 1).negate();
             
             positionHistory.remove(positionHistory.size() - 1);
             board.undoMove();
@@ -620,7 +620,7 @@ public class BestMoveCalculator {
             
             for (Move move : legalMoves) {
                 board.doMove(move);
-                Score score = alphaBeta(board, depth - 1, beta.negate(), alpha.negate(), 1).negate();
+                Score score = alphaBeta(board, depth - 1, alpha.negate(), beta.negate(), 1).negate();
                 board.undoMove();
                 
                 if (score.compareTo(bestScore) > 0) {
