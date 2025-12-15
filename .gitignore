@@ -1,0 +1,8 @@
+/.idea/
+/.mvn/
+/target/
+/buf.lock
+agent.env
+logs
+.run
+*.txt
