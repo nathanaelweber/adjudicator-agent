@@ -8,21 +8,24 @@ package ch.adjudicator.agent.positionevaluation;
 public class Score implements Comparable<Score> {
     private final boolean isMate;
     private final int value; // For numeric scores, this is centipawns; for mate, this is moves to mate (positive = winning, negative = losing)
+    private final int matePlayedMovesDistance;
 
     // Special score values
-    public static final int MATE_SCORE = 30000;
+    public static final int MATE_SCORE = 300000;
     public static final int MAX_MATE_DISTANCE = 1000; // Maximum ply distance for mate detection
+    public static final int DRAW_SCORE = 0;
 
-    private Score(boolean isMate, int value) {
+    private Score(boolean isMate, int value, int matePlayedMovesDistance) {
         this.isMate = isMate;
         this.value = value;
+        this.matePlayedMovesDistance = matePlayedMovesDistance;
     }
 
     /**
      * Create a numeric score in centipawns
      */
     public static Score valueOf(int centipawns) {
-        return new Score(false, centipawns);
+        return new Score(false, centipawns, 0);
     }
 
     /**
@@ -30,17 +33,32 @@ public class Score implements Comparable<Score> {
      * @param movesToMate Number of moves to mate (positive = we win, negative = we lose)
      */
     public static Score mateIn(int movesToMate) {
-        return new Score(true, movesToMate);
+        return new Score(true, movesToMate, 0);
     }
 
     /**
      * Create a mate score from ply distance
      * @param plyDistance Distance in ply from current position (always positive)
-     * @param weAreWinning true if we are delivering mate, false if we are getting mated
      */
-    public static Score mateInPly(int plyDistance, boolean weAreWinning) {
+    public static Score mateInPly(int plyDistance) {
         int movesToMate = (plyDistance + 1) / 2; // Convert ply to moves
-        return new Score(true, weAreWinning ? movesToMate : -movesToMate);
+        return new Score(true, 0, movesToMate);
+    }
+
+    public Score deepClone() {
+        return new Score(isMate, value, matePlayedMovesDistance);
+    }
+
+    public static Score min(Score compare, Score score) {
+        int value = Math.min(score.value, compare.value);
+        if(value == compare.value) return compare.deepClone();
+        return score.deepClone();
+    }
+
+    public static Score max(Score compare, Score score) {
+        int value = Math.max(score.value, compare.value);
+        if(value == compare.value) return compare.deepClone();
+        return score.deepClone();
     }
 
     public boolean isMate() {
@@ -49,20 +67,6 @@ public class Score implements Comparable<Score> {
 
     public int getValue() {
         return value;
-    }
-
-    /**
-     * Returns true if this is a winning mate score
-     */
-    public boolean isWinningMate() {
-        return isMate && value > 0;
-    }
-
-    /**
-     * Returns true if this is a losing mate score
-     */
-    public boolean isLosingMate() {
-        return isMate && value < 0;
     }
 
     /**
@@ -76,7 +80,7 @@ public class Score implements Comparable<Score> {
      * Negate the score (for switching perspective)
      */
     public Score negate() {
-        return new Score(isMate, -value);
+        return new Score(isMate, -value, matePlayedMovesDistance);
     }
 
     /**
@@ -90,7 +94,7 @@ public class Score implements Comparable<Score> {
         // If it's a winning mate, we increase the distance (further from mate)
         // If it's a losing mate, we also increase the distance (further from getting mated)
         int newMovesToMate = value > 0 ? value + 1 : value - 1;
-        return new Score(true, newMovesToMate);
+        return new Score(true, 0, newMovesToMate);
     }
 
     @Override
@@ -138,7 +142,7 @@ public class Score implements Comparable<Score> {
         if (this == obj) return true;
         if (!(obj instanceof Score)) return false;
         Score other = (Score) obj;
-        return this.isMate == other.isMate && this.value == other.value;
+        return this.isMate == other.isMate && this.value == other.value && this.matePlayedMovesDistance == other.matePlayedMovesDistance;
     }
 
     @Override
@@ -154,7 +158,7 @@ public class Score implements Comparable<Score> {
             // Encode mate scores as large values
             // Positive mate: MATE_SCORE - movesToMate
             // Negative mate: -MATE_SCORE + movesToMate
-            return value > 0 ? MATE_SCORE - value : -MATE_SCORE - value;
+            return value > 0 ? MATE_SCORE - matePlayedMovesDistance : -MATE_SCORE - matePlayedMovesDistance;
         }
         return value;
     }

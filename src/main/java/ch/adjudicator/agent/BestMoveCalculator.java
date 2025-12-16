@@ -15,6 +15,8 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
 
+import static ch.adjudicator.agent.positionevaluation.Score.DRAW_SCORE;
+
 public class BestMoveCalculator {
     private static final Logger LOGGER = LoggerFactory.getLogger(BestMoveCalculator.class);
 
@@ -25,9 +27,6 @@ public class BestMoveCalculator {
     private static final int ROOK_VALUE = 500;
     private static final int QUEEN_VALUE = 900;
     private static final int KING_VALUE = 20000;
-    
-    private static final int CHECKMATE_SCORE = 30000;
-    private static final int DRAW_SCORE = 0;
 
     // Transposition Table constants
     private static final int TT_SIZE = 1 << 20; // 1M entries (~64MB with 64 bytes per entry)
@@ -47,7 +46,9 @@ public class BestMoveCalculator {
     
     // Position history for repetition detection
     private List<Long> positionHistory;
-    
+    private List<Move> debugMoveHistory;
+    private boolean collectDebugMoves = true;
+
     // Zobrist hashing
     private ZobristHash zobristHash;
 
@@ -68,6 +69,8 @@ public class BestMoveCalculator {
         
         // Initialize position history for repetition detection
         positionHistory = new ArrayList<>();
+
+        debugMoveHistory = new ArrayList<>();
         
         // Try to load opening book from docs directory
         try {
@@ -247,6 +250,8 @@ public class BestMoveCalculator {
         for (int i = 0; i < TT_SIZE; i++) {
             transpositionTable[i] = new TranspositionTableEntry();
         }
+
+        debugMoveHistory.clear();
     }
 
     private String moveToLAN(Move move) {
@@ -257,9 +262,8 @@ public class BestMoveCalculator {
      * Evaluate the board position from the perspective of the side to move.
      * Positive scores favor the side to move, negative scores favor the opponent.
      */
-    private Score evaluate(Board board) {
+    private Score evaluate(Board board, Side maximizingPlayersSide) {
         int score = 0;
-        Side sideToMove = board.getSideToMove();
         
         // Count material for both sides
         for (Square square : Square.values()) {
@@ -270,8 +274,8 @@ public class BestMoveCalculator {
             
             int pieceValue = getPieceValue(piece, square);
             
-            // Add value if piece belongs to side to move, subtract otherwise
-            if (piece.getPieceSide() == sideToMove) {
+            // Evaluate the board from the perspective of the one who just has done the move.
+            if (piece.getPieceSide() == maximizingPlayersSide) {
                 score += pieceValue;
             } else {
                 score -= pieceValue;
@@ -395,15 +399,31 @@ public class BestMoveCalculator {
     /**
      * Quiescence search to handle tactical sequences (captures).
      */
-    private Score quiescence(Board board, Score alpha, Score beta, int ply) {
+    private Score quiescence(Board board, Side maximizingPlayersSide,  Score alpha, Score beta, int ply) {
         // Stand-pat score
-        Score standPat = evaluate(board);
+        {
+            Board compare = new Board();
+            compare.loadFromFen("4k3/8/8/4q3/8/8/5KPP/4R3 b - - 0 1");
+            if (board.toString().equals(compare.toString())) {
+                LOGGER.info("quiescence first step: {}", evaluate(board, maximizingPlayersSide));
+            }
+        }
+
+        {
+            Board compare = new Board();
+            compare.loadFromFen("4k3/8/8/8/8/8/6PP/4K3 b - - 0 1");
+            if (board.toString().equals(compare.toString())) {
+                LOGGER.info("quiescence very nice: {}", evaluate(board, maximizingPlayersSide));
+            }
+        }
+
+        Score bestValue = evaluate(board, maximizingPlayersSide);
         
-        if (standPat.compareTo(beta) >= 0) {
+        if (bestValue.compareTo(beta) >= 0) {
             return beta;
         }
-        if (alpha.compareTo(standPat) < 0) {
-            alpha = standPat;
+        if (alpha.compareTo(bestValue) < 0) {
+            alpha = bestValue;
         }
         
         // Generate and search only tactical moves (captures and promotions)
@@ -430,18 +450,21 @@ public class BestMoveCalculator {
         
         for (Move move : tacticalMoves) {
             board.doMove(move);
-            Score score = quiescence(board, beta.negate(), alpha.negate(), ply + 1).negate();
+            Score score = quiescence(board, maximizingPlayersSide, beta.negate(), alpha.negate(), ply + 1).negate();
             board.undoMove();
             
             if (score.compareTo(beta) >= 0) {
-                return beta;
+                return score;
+            }
+            if(score.compareTo(bestValue) > 0) {
+                bestValue = score;
             }
             if (score.compareTo(alpha) > 0) {
                 alpha = score;
             }
         }
         
-        return alpha;
+        return bestValue;
     }
     
     /**
@@ -471,8 +494,28 @@ public class BestMoveCalculator {
     /**
      * Alpha-beta search with a fixed depth.
      */
-    private Score alphaBeta(Board board, int depth, Score alpha, Score beta, int ply) {
-        Score alphaOrig = alpha;
+    private Score alphaBeta(Board board, int depth, Score alpha, Score beta, Side maximizingPlayersSide, boolean isMaximizingPlayer, int ply) {
+        if(collectDebugMoves) {
+            if(debugMoveHistory.getFirst().toString().toUpperCase().equals("F1E1")) {
+                LOGGER.info("Evaluate alphaBeta on depth {}: {}", depth, debugMoveHistory);
+            }
+        }
+
+        {
+            Board compare = new Board();
+            compare.loadFromFen("4k3/8/8/4q3/8/8/5KPP/4R3 b - - 0 1");
+            if (board.toString().equals(compare.toString())) {
+                LOGGER.info("alphaBeta first step: {}", evaluate(board, maximizingPlayersSide));
+            }
+        }
+
+        {
+            Board compare = new Board();
+            compare.loadFromFen("4k3/8/8/8/8/8/6PP/4K3 b - - 0 1");
+            if (board.toString().equals(compare.toString())) {
+                LOGGER.info("alphaBeta very nice: {}", evaluate(board, maximizingPlayersSide));
+            }
+        }
         
         // Compute position hash
         long positionHash = zobristHash.computeHash(board);
@@ -502,8 +545,8 @@ public class BestMoveCalculator {
         if (legalMoves.isEmpty()) {
             if (board.isKingAttacked()) {
                 // Checkmate - we are getting mated at this position
-                // Return losing mate score with distance = ply from root
-                return Score.mateInPly(ply, false);
+                // Return mate score with distance = ply from root
+                return Score.mateInPly(ply);
             } else {
                 // Stalemate
                 return Score.valueOf(DRAW_SCORE);
@@ -512,7 +555,17 @@ public class BestMoveCalculator {
         
         // Base case: use quiescence search at leaf nodes
         if (depth <= 0) {
-            return quiescence(board, alpha, beta, ply);
+            Score score = evaluate(board, maximizingPlayersSide);
+            if(!isMaximizingPlayer) {
+                score = score.negate().deepClone();
+            }
+            //Score score = quiescence(board, alpha, beta, ply);
+            if(collectDebugMoves) {
+                if(debugMoveHistory.getFirst().toString().toUpperCase().equals("F1E1")) {
+                    LOGGER.info("Final quiescence score: {}", score);
+                }
+            }
+            return score;
         }
         
         // Try TT move first if available
@@ -521,58 +574,79 @@ public class BestMoveCalculator {
             legalMoves.remove(ttMove);
             legalMoves.add(0, ttMove);
         }
-        
-        Score bestScore = Score.valueOf(-Score.MATE_SCORE - 1000);
-        Move bestMove = null;
-        
-        for (Move move : legalMoves) {
-            board.doMove(move);
-            long newPositionHash = zobristHash.computeHash(board);
-            positionHistory.add(newPositionHash);
-            
-            Score score = alphaBeta(board, depth - 1, alpha.negate(), beta.negate(), ply + 1).negate();
-            
-            positionHistory.remove(positionHistory.size() - 1);
-            board.undoMove();
-            
-            if (score.compareTo(bestScore) > 0) {
-                bestScore = score;
-                bestMove = move;
+
+        if(isMaximizingPlayer) {
+            Score bestScore = Score.valueOf(-Score.MATE_SCORE - 1000);
+            Move bestMove = null;
+
+            for (Move move : legalMoves) {
+                board.doMove(move);
+                if(collectDebugMoves) {
+                    debugMoveHistory.add(move);
+                }
+
+                long newPositionHash = zobristHash.computeHash(board);
+                positionHistory.add(newPositionHash);
+
+                bestScore = Score.max(bestScore, alphaBeta(board, depth - 1, alpha, beta,  maximizingPlayersSide,false,ply + 1));
+
+                positionHistory.removeLast();
+                if(collectDebugMoves) {
+                    debugMoveHistory.removeLast();
+                }
+                board.undoMove();
+
+
+                // Beta cutoff - prune this branch
+                if (bestScore.getValue() > beta.getValue()) {
+                    break;
+                }
+
+                alpha = Score.max(alpha, bestScore);
+
+                // If we found a winning mate, we can stop searching deeper in this branch
+                // (all other moves will be evaluated, but we know we have a forced win)
+                /*if (bestScore.isWinningMate()) {
+                    // Continue to find the shortest mate among siblings
+                }*/
             }
-            
-            if (score.compareTo(alpha) > 0) {
-                alpha = score;
-            }
-            
-            // Beta cutoff - prune this branch
-            if (alpha.compareTo(beta) >= 0) {
-                break;
-            }
-            
-            // If we found a winning mate, we can stop searching deeper in this branch
-            // (all other moves will be evaluated, but we know we have a forced win)
-            if (bestScore.isWinningMate()) {
-                // Continue to find the shortest mate among siblings
-            }
-        }
-        
-        // Increment mate distance when propagating up the tree
-        if (bestScore.isMate()) {
-            bestScore = bestScore.incrementMateDistance();
-        }
-        
-        // Store in transposition table
-        byte nodeType;
-        if (bestScore.compareTo(alphaOrig) <= 0) {
-            nodeType = TT_ALPHA;
-        } else if (bestScore.compareTo(beta) >= 0) {
-            nodeType = TT_BETA;
+            return bestScore;
         } else {
-            nodeType = TT_EXACT;
+            Score bestScore = Score.valueOf(Score.MATE_SCORE + 1000);
+            Move bestMove = null;
+
+            for (Move move : legalMoves) {
+                board.doMove(move);
+                if(collectDebugMoves) {
+                    debugMoveHistory.add(move);
+                }
+
+                long newPositionHash = zobristHash.computeHash(board);
+                positionHistory.add(newPositionHash);
+
+                bestScore = Score.min(bestScore, alphaBeta(board, depth - 1, alpha, beta, maximizingPlayersSide, true,ply + 1));
+
+                positionHistory.removeLast();
+                if(collectDebugMoves) {
+                    debugMoveHistory.removeLast();
+                }
+                board.undoMove();
+
+                // Alpha cutoff - prune this branch
+                if (bestScore.getValue() <= alpha.getValue()) {
+                    break;
+                }
+
+                beta = Score.min(beta, bestScore);
+
+                // If we found a winning mate, we can stop searching deeper in this branch
+                // (all other moves will be evaluated, but we know we have a forced win)
+                /*if (bestScore.isWinningMate()) {
+                    // Continue to find the shortest mate among siblings
+                }*/
+            }
+            return bestScore;
         }
-        ttEntry.store(positionHash, depth, bestScore.toInt(), bestMove, nodeType);
-        
-        return bestScore;
     }
     
     /**
@@ -606,30 +680,49 @@ public class BestMoveCalculator {
             int score2 = getMoveScore(board, m2);
             return Integer.compare(score2, score1);
         });
+
+        Side maximizingPlayersSide = board.getSideToMove();
         
         Move bestMove = legalMoves.get(0);
         long startTime = System.currentTimeMillis();
+        Score bestScore = Score.valueOf(-Score.MATE_SCORE - 1000);
         
         // Iterative deepening
-        for (int depth = 1; depth <= 4; depth++) {
+        for (int depth = 1; depth <= 30; depth++) {
+        //for (int depth = 1; depth <= 5; depth++) {
+        //for (int depth = 3; depth == 3; depth++) {
             long elapsed = System.currentTimeMillis() - startTime;
             if (elapsed >= budgetMs) {
                 break;
             }
-            
-            Score bestScore = Score.valueOf(-Score.MATE_SCORE - 1000);
-            Move currentBestMove = bestMove;
+
+            Move thisDepthsBestMove = bestMove;
+            Score thisDepthsBestScore = Score.valueOf(-Score.MATE_SCORE - 1000);
             Score alpha = Score.valueOf(-Score.MATE_SCORE - 1000);
             Score beta = Score.valueOf(Score.MATE_SCORE + 1000);
-            
+
+            boolean thisDepthIsAborted = false;
+
             for (Move move : legalMoves) {
                 board.doMove(move);
-                Score score = alphaBeta(board, depth - 1, alpha.negate(), beta.negate(), 1).negate();
+                if(collectDebugMoves) {
+                    debugMoveHistory.add(move);
+                }
+                Score score = alphaBeta(board, depth - 1, alpha, beta, maximizingPlayersSide, true,1);
+                LOGGER.info("Tracing... [{}] Depth {} move {}: {}", name, depth, moveToLAN(move), score);
+
+                if(collectDebugMoves) {
+                    debugMoveHistory.removeLast();
+                }
                 board.undoMove();
+
+                /*if(depth %2 == 0) {
+                    score = score.negate();
+                }*/
                 
-                if (score.compareTo(bestScore) > 0) {
-                    bestScore = score;
-                    currentBestMove = move;
+                if (score.getValue() > thisDepthsBestScore.getValue()) {
+                    thisDepthsBestScore = score;
+                    thisDepthsBestMove = move;
                 }
                 
                 if (score.compareTo(alpha) > 0) {
@@ -639,21 +732,28 @@ public class BestMoveCalculator {
                 // Check time
                 elapsed = System.currentTimeMillis() - startTime;
                 if (elapsed >= budgetMs) {
+                    thisDepthIsAborted = true;
                     break;
                 }
                 
                 // If we found a forced mate, we can stop searching this depth
                 // (we'll still complete higher depths if time allows to find shorter mates)
-                if (bestScore.isWinningMate()) {
-                    LOGGER.info("[{}] Found forced mate at depth {}: {}", name, depth, bestScore);
+                /*if (thisDepthsBestScore.isWinningMate()) {
+                    LOGGER.info("[{}] Found forced mate at depth {}: {}", name, depth, thisDepthsBestScore);
                     break;
-                }
+                }*/
             }
-            
-            bestMove = currentBestMove;
-            LOGGER.debug("[{}] Depth {} completed, best move: {}, score: {}", 
+
+            if(!thisDepthIsAborted) {
+                bestMove = thisDepthsBestMove;
+                bestScore = thisDepthsBestScore;
+                LOGGER.debug("[{}] Depth {} completed, best move: {}, score: {}",
                         name, depth, moveToLAN(bestMove), bestScore);
-            
+            } else {
+                LOGGER.debug("[{}] Depth {} unfinished, best move from last depth: {}, score: {}",
+                        name, depth, moveToLAN(bestMove), bestScore);
+            }
+
             // If we found a mate in 1, no need to search deeper
             if (bestScore.isMate() && bestScore.getMovesToMate() == 1) {
                 LOGGER.info("[{}] Mate in 1 found, stopping search", name);

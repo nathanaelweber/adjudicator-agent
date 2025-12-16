@@ -2,17 +2,11 @@ package ch.adjudicator.agent;
 
 import ch.adjudicator.client.*;
 import com.github.bhlangonijr.chesslib.Board;
-import com.github.bhlangonijr.chesslib.Side;
-import com.github.bhlangonijr.chesslib.Piece;
-import com.github.bhlangonijr.chesslib.Square;
 import com.github.bhlangonijr.chesslib.move.Move;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.*;
-import java.util.concurrent.ThreadLocalRandom;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.locks.LockSupport;
 
 /**
  * SmartAgent: A stronger chess agent using Iterative Deepening + Alpha-Beta + Quiescence,
