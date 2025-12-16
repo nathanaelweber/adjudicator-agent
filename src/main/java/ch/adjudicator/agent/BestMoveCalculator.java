@@ -8,6 +8,10 @@ import com.github.bhlangonijr.chesslib.Piece;
 import com.github.bhlangonijr.chesslib.Square;
 import com.github.bhlangonijr.chesslib.Side;
 import com.github.bhlangonijr.chesslib.move.Move;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -264,6 +268,7 @@ public class BestMoveCalculator {
      */
     private Score evaluate(Board board, Side maximizingPlayersSide) {
         int score = 0;
+        Side sideToMove = board.getSideToMove();
         
         // Count material for both sides
         for (Square square : Square.values()) {
@@ -275,10 +280,10 @@ public class BestMoveCalculator {
             int pieceValue = getPieceValue(piece, square);
             
             // Evaluate the board from the perspective of the one who just has done the move.
-            if (piece.getPieceSide() == maximizingPlayersSide) {
-                score += pieceValue;
-            } else {
+            if (piece.getPieceSide() == sideToMove) {
                 score -= pieceValue;
+            } else {
+                score += pieceValue;
             }
         }
         
@@ -491,10 +496,24 @@ public class BestMoveCalculator {
         return score;
     }
 
+    @AllArgsConstructor
+    @NoArgsConstructor
+    @Data
+    @Builder
+    private static class ResultingScoreAndBounds {
+        Score score;
+        Score alpha;
+        Score beta;
+    }
+
     /**
      * Alpha-beta search with a fixed depth.
+     * Inspired from:
+     * https://en.wikipedia.org/wiki/Alpha%E2%80%93beta_pruning
+     * and
+     * https://www.chessprogramming.org/Alpha-Beta
      */
-    private Score alphaBeta(Board board, int depth, Score alpha, Score beta, Side maximizingPlayersSide, boolean isMaximizingPlayer, int ply) {
+    private ResultingScoreAndBounds alphaBeta(Board board, int depth, Score alpha, Score beta, Side maximizingPlayersSide, final boolean isMaximizingPlayer, int ply) {
         if(collectDebugMoves) {
             if(debugMoveHistory.getFirst().toString().toUpperCase().equals("F1E1")) {
                 LOGGER.info("Evaluate alphaBeta on depth {}: {}", depth, debugMoveHistory);
@@ -522,9 +541,14 @@ public class BestMoveCalculator {
         
         // Check for repetition (3-fold repetition is a draw)
         if (isRepetition(positionHash)) {
-            return Score.valueOf(DRAW_SCORE);
+            return ResultingScoreAndBounds.builder()
+                    .score(Score.valueOf(DRAW_SCORE))
+                    .alpha(alpha.deepClone())
+                    .beta(beta.deepClone())
+                    .build();
         }
-        
+
+        /*
         // Transposition table lookup
         int ttIndex = (int)(positionHash & TT_MASK);
         TranspositionTableEntry ttEntry = transpositionTable[ttIndex];
@@ -538,7 +562,7 @@ public class BestMoveCalculator {
             } else if (ttEntry.nodeType == TT_BETA && ttScore.compareTo(beta) >= 0) {
                 return beta;
             }
-        }
+        }*/
         
         // Check if position is terminal (checkmate, stalemate)
         List<Move> legalMoves = board.legalMoves();
@@ -546,10 +570,18 @@ public class BestMoveCalculator {
             if (board.isKingAttacked()) {
                 // Checkmate - we are getting mated at this position
                 // Return mate score with distance = ply from root
-                return Score.mateInPly(ply);
+                return ResultingScoreAndBounds.builder()
+                        .score(Score.mateInPly(ply))
+                        .alpha(alpha.deepClone())
+                        .beta(beta.deepClone())
+                        .build();
             } else {
                 // Stalemate
-                return Score.valueOf(DRAW_SCORE);
+                return ResultingScoreAndBounds.builder()
+                        .score(Score.valueOf(DRAW_SCORE))
+                        .alpha(alpha.deepClone())
+                        .beta(beta.deepClone())
+                        .build();
             }
         }
         
@@ -557,7 +589,7 @@ public class BestMoveCalculator {
         if (depth <= 0) {
             Score score = evaluate(board, maximizingPlayersSide);
             if(!isMaximizingPlayer) {
-                score = score.negate().deepClone();
+                score = score.negate();
             }
             //Score score = quiescence(board, alpha, beta, ply);
             if(collectDebugMoves) {
@@ -565,14 +597,11 @@ public class BestMoveCalculator {
                     LOGGER.info("Final quiescence score: {}", score);
                 }
             }
-            return score;
-        }
-        
-        // Try TT move first if available
-        Move ttMove = ttEntry.isValid(positionHash, depth) ? ttEntry.bestMove : null;
-        if (ttMove != null && legalMoves.contains(ttMove)) {
-            legalMoves.remove(ttMove);
-            legalMoves.add(0, ttMove);
+            return ResultingScoreAndBounds.builder()
+                    .score(score.deepClone())
+                    .alpha(alpha.deepClone())
+                    .beta(beta.deepClone())
+                    .build();
         }
 
         if(isMaximizingPlayer) {
@@ -588,7 +617,7 @@ public class BestMoveCalculator {
                 long newPositionHash = zobristHash.computeHash(board);
                 positionHistory.add(newPositionHash);
 
-                bestScore = Score.max(bestScore, alphaBeta(board, depth - 1, alpha, beta,  maximizingPlayersSide,false,ply + 1));
+                Score score = alphaBeta(board, depth - 1, alpha, beta,  maximizingPlayersSide,false,ply + 1).getScore();
 
                 positionHistory.removeLast();
                 if(collectDebugMoves) {
@@ -596,13 +625,21 @@ public class BestMoveCalculator {
                 }
                 board.undoMove();
 
+                if(score.getValue() > bestScore.getValue()) {
+                    bestScore = score.deepClone();
+                    if(score.getValue() > alpha.getValue()) {
+                        alpha = score.deepClone();
+                    }
+                }
 
                 // Beta cutoff - prune this branch
                 if (bestScore.getValue() > beta.getValue()) {
-                    break;
+                    return ResultingScoreAndBounds.builder()
+                            .score(bestScore.deepClone())
+                            .alpha(alpha.deepClone())
+                            .beta(beta.deepClone())
+                            .build();
                 }
-
-                alpha = Score.max(alpha, bestScore);
 
                 // If we found a winning mate, we can stop searching deeper in this branch
                 // (all other moves will be evaluated, but we know we have a forced win)
@@ -610,7 +647,11 @@ public class BestMoveCalculator {
                     // Continue to find the shortest mate among siblings
                 }*/
             }
-            return bestScore;
+            return ResultingScoreAndBounds.builder()
+                    .score(bestScore.deepClone())
+                    .alpha(alpha.deepClone())
+                    .beta(beta.deepClone())
+                    .build();
         } else {
             Score bestScore = Score.valueOf(Score.MATE_SCORE + 1000);
             Move bestMove = null;
@@ -624,7 +665,8 @@ public class BestMoveCalculator {
                 long newPositionHash = zobristHash.computeHash(board);
                 positionHistory.add(newPositionHash);
 
-                bestScore = Score.min(bestScore, alphaBeta(board, depth - 1, alpha, beta, maximizingPlayersSide, true,ply + 1));
+
+                Score score = alphaBeta(board, depth - 1, alpha, beta, maximizingPlayersSide, true,ply + 1).getScore();
 
                 positionHistory.removeLast();
                 if(collectDebugMoves) {
@@ -632,9 +674,20 @@ public class BestMoveCalculator {
                 }
                 board.undoMove();
 
+                if(score.getValue() < bestScore.getValue()) {
+                    bestScore = score.deepClone();
+                    if(score.getValue() < beta.getValue()) {
+                        beta = score.deepClone();
+                    }
+                }
+
                 // Alpha cutoff - prune this branch
-                if (bestScore.getValue() <= alpha.getValue()) {
-                    break;
+                if (score.getValue() <= alpha.getValue()) {
+                    return ResultingScoreAndBounds.builder()
+                            .score(score.deepClone())
+                            .alpha(alpha.deepClone())
+                            .beta(beta.deepClone())
+                            .build();
                 }
 
                 beta = Score.min(beta, bestScore);
@@ -645,7 +698,11 @@ public class BestMoveCalculator {
                     // Continue to find the shortest mate among siblings
                 }*/
             }
-            return bestScore;
+            return ResultingScoreAndBounds.builder()
+                    .score(bestScore.deepClone())
+                    .alpha(alpha.deepClone())
+                    .beta(beta.deepClone())
+                    .build();
         }
     }
     
@@ -688,7 +745,7 @@ public class BestMoveCalculator {
         Score bestScore = Score.valueOf(-Score.MATE_SCORE - 1000);
         
         // Iterative deepening
-        for (int depth = 1; depth <= 30; depth++) {
+        for (int depth = 1; depth <= 4; depth++) {
         //for (int depth = 1; depth <= 5; depth++) {
         //for (int depth = 3; depth == 3; depth++) {
             long elapsed = System.currentTimeMillis() - startTime;
@@ -698,8 +755,6 @@ public class BestMoveCalculator {
 
             Move thisDepthsBestMove = bestMove;
             Score thisDepthsBestScore = Score.valueOf(-Score.MATE_SCORE - 1000);
-            Score alpha = Score.valueOf(-Score.MATE_SCORE - 1000);
-            Score beta = Score.valueOf(Score.MATE_SCORE + 1000);
 
             boolean thisDepthIsAborted = false;
 
@@ -708,8 +763,12 @@ public class BestMoveCalculator {
                 if(collectDebugMoves) {
                     debugMoveHistory.add(move);
                 }
-                Score score = alphaBeta(board, depth - 1, alpha, beta, maximizingPlayersSide, true,1);
-                LOGGER.info("Tracing... [{}] Depth {} move {}: {}", name, depth, moveToLAN(move), score);
+                Score alpha = Score.valueOf(-Score.MATE_SCORE - 1000);
+                Score beta = Score.valueOf(Score.MATE_SCORE + 1000);
+
+                ResultingScoreAndBounds resultingScoreAndBounds = alphaBeta(board, depth - 1, alpha, beta, maximizingPlayersSide, true,1);
+                Score score = resultingScoreAndBounds.getScore();
+                LOGGER.info("Tracing... [{}] Depth {} move {}: {}", name, depth, moveToLAN(move), resultingScoreAndBounds);
 
                 if(collectDebugMoves) {
                     debugMoveHistory.removeLast();
@@ -723,10 +782,6 @@ public class BestMoveCalculator {
                 if (score.getValue() > thisDepthsBestScore.getValue()) {
                     thisDepthsBestScore = score;
                     thisDepthsBestMove = move;
-                }
-                
-                if (score.compareTo(alpha) > 0) {
-                    alpha = score;
                 }
                 
                 // Check time
