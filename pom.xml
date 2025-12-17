@@ -226,7 +226,7 @@
                     <finalName>${project.artifactId}-${project.version}</finalName>
                     <archive>
                         <manifest>
-                            <mainClass>com.adjudicator.pure.AgentStarter</mainClass>
+                            <mainClass>ch.adjudicator.agent.EasyAgent</mainClass>
                         </manifest>
                     </archive>
                 </configuration>
