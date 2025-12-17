@@ -139,7 +139,7 @@ You can run it directly using Maven.
 ### Command Line Arguments
 
 ```bash
-mvn exec:java "-Dexec.mainClass=ch.adjudicator.agent.EasyAgent" \
+mvn exec:java "-Dexec.mainClass=ch.adjudicator.agent.SmartAgent" \
   "-Dexec.args=--key <YOUR_API_KEY> --name MyBot --mode RANKED"
 ```
 
