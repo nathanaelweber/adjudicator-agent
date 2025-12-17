@@ -275,7 +275,7 @@ public class BestMoveCalculator {
      */
     private Score evaluate(Board board, Side maximizingPlayersSide) {
         int score = 0;
-        Side sideToMove = board.getSideToMove();
+        //Side sideToMove = board.getSideToMove();
         
         // Count material for both sides
         for (Square square : Square.values()) {
@@ -287,10 +287,10 @@ public class BestMoveCalculator {
             int pieceValue = getPieceValue(piece, square);
             
             // Evaluate the board from the perspective of the one who just has done the move.
-            if (piece.getPieceSide() == sideToMove) {
-                score += pieceValue;
-            } else {
+            if (piece.getPieceSide() == maximizingPlayersSide) {
                 score -= pieceValue;
+            } else {
+                score += pieceValue;
             }
         }
         
