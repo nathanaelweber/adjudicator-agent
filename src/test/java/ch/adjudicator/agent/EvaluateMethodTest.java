@@ -14,8 +14,8 @@ import static org.junit.jupiter.api.Assertions.*;
  * from the perspective of the maximizing player.
  * 
  * Key principles tested:
- * - Positive scores should favor the maximizing player
- * - Negative scores should favor the opponent
+ * - Positive scores should favor the on turn player
+ * - Negative scores should favor the opponent of the one player that has the turn
  * - Scores should be consistent when perspective changes
  * - Material advantage should be reflected correctly
  */
@@ -28,23 +28,23 @@ class EvaluateMethodTest {
     void setUp() throws Exception {
         calculator = new BestMoveCalculator();
         // Access private evaluate method via reflection
-        evaluateMethod = BestMoveCalculator.class.getDeclaredMethod("evaluate", Board.class, Side.class);
+        evaluateMethod = BestMoveCalculator.class.getDeclaredMethod("evaluate", Board.class);
         evaluateMethod.setAccessible(true);
     }
 
     /**
      * Helper method to call the private evaluate method
      */
-    private int evaluate(Board board, Side maximizingPlayersSide) throws Exception {
-        return (int) evaluateMethod.invoke(calculator, board, maximizingPlayersSide);
+    private int evaluate(Board board) throws Exception {
+        return (int) evaluateMethod.invoke(calculator, board);
     }
 
     @Test
-    void testStartingPosition_WhiteMaximizing() throws Exception {
+    void testStartingPosition_WhiteOnTurn() throws Exception {
         // Starting position should be equal (score close to 0)
         Board board = new Board();
         
-        int score = evaluate(board, Side.WHITE);
+        int score = evaluate(board);
         
         // Starting position should be approximately equal (within small positional bonus range)
         assertTrue(Math.abs(score) < 50, 
@@ -52,24 +52,25 @@ class EvaluateMethodTest {
     }
 
     @Test
-    void testStartingPosition_BlackMaximizing() throws Exception {
+    void testStartingPosition_BlackOnTurn() throws Exception {
         // Starting position should be equal (score close to 0)
         Board board = new Board();
+        board.doMove("e2e4");
         
-        int score = evaluate(board, Side.BLACK);
+        int score = evaluate(board);
         
-        // Starting position should be approximately equal (within small positional bonus range)
+        // After first move when black is on turn should be approximately equal (within small positional bonus range)
         assertTrue(Math.abs(score) < 50, 
                 "Starting position should be nearly equal, but got score: " + score);
     }
 
     @Test
-    void testWhiteUpOnePawn_WhiteMaximizing() throws Exception {
+    void testWhiteUpOnePawn_WhiteOnTurn() throws Exception {
         // White has one extra pawn
         Board board = new Board();
         board.loadFromFen("rnbqkbnr/1ppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
         
-        int score = evaluate(board, Side.WHITE);
+        int score = evaluate(board);
         
         // White is up material, so from White's perspective the score should favor opponent
         // (because maximizing player pieces subtract from score)
@@ -82,12 +83,12 @@ class EvaluateMethodTest {
     }
 
     @Test
-    void testWhiteUpOnePawn_BlackMaximizing() throws Exception {
+    void testWhiteUpOnePawn_BlackOnTurn() throws Exception {
         // White has one extra pawn
         Board board = new Board();
-        board.loadFromFen("rnbqkbnr/1ppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+        board.loadFromFen("rnbqkbnr/1ppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0 1");
         
-        int score = evaluate(board, Side.BLACK);
+        int score = evaluate(board);
         
         // White is up material, so from Black's perspective the score should be negative
         // (because opponent pieces add to score)
@@ -100,12 +101,12 @@ class EvaluateMethodTest {
     }
 
     @Test
-    void testBlackUpOnePawn_WhiteMaximizing() throws Exception {
+    void testBlackUpOnePawn_WhiteOnTurn() throws Exception {
         // Black has one extra pawn
         Board board = new Board();
         board.loadFromFen("rnbqkbnr/pppppppp/8/8/8/8/1PPPPPPP/RNBQKBNR w KQkq - 0 1");
         
-        int score = evaluate(board, Side.WHITE);
+        int score = evaluate(board);
         
         // Black is up material, so from White's perspective the score should be negative
         // (because opponent pieces add to score)
@@ -118,12 +119,12 @@ class EvaluateMethodTest {
     }
 
     @Test
-    void testBlackUpOnePawn_BlackMaximizing() throws Exception {
+    void testBlackUpOnePawn_BlackOnTurn() throws Exception {
         // Black has one extra pawn
         Board board = new Board();
-        board.loadFromFen("rnbqkbnr/pppppppp/8/8/8/8/1PPPPPPP/RNBQKBNR w KQkq - 0 1");
+        board.loadFromFen("rnbqkbnr/pppppppp/8/8/8/8/1PPPPPPP/RNBQKBNR b KQkq - 0 1");
         
-        int score = evaluate(board, Side.BLACK);
+        int score = evaluate(board);
         
         // Black is up material, so from Black's perspective the score should be positive
         // (because maximizing player pieces subtract from score)
@@ -136,12 +137,12 @@ class EvaluateMethodTest {
     }
 
     @Test
-    void testWhiteUpKnight_WhiteMaximizing() throws Exception {
+    void testWhiteUpKnight_WhiteOnTurn() throws Exception {
         // White has an extra knight
         Board board = new Board();
         board.loadFromFen("rnbqkb1r/pppppppp/8/8/8/N7/PPPPPPPP/R1BQKBNR w KQkq - 0 1");
         
-        int score = evaluate(board, Side.WHITE);
+        int score = evaluate(board);
         
         // White is up a knight, from White's perspective should be positive
         assertTrue(score > 0,
@@ -153,12 +154,12 @@ class EvaluateMethodTest {
     }
 
     @Test
-    void testWhiteUpQueen_BlackMaximizing() throws Exception {
+    void testWhiteUpQueen_BlackOnTurn() throws Exception {
         // White has queen, Black doesn't
         Board board = new Board();
-        board.loadFromFen("rnb1kbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+        board.loadFromFen("rnb1kbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0 1");
         
-        int score = evaluate(board, Side.BLACK);
+        int score = evaluate(board);
         
         // White is up a queen, from Black's perspective should be negative (opponent advantage)
         assertTrue(score < 0,
@@ -170,27 +171,13 @@ class EvaluateMethodTest {
     }
 
     @Test
-    void testSymmetry_PerspectiveChange() throws Exception {
-        // Test that swapping perspective inverts the score (approximately)
-        Board board = new Board();
-        board.loadFromFen("rnbqkbnr/pppppppp/8/8/8/P7/1PPPPPPP/RNBQKBNR w KQkq - 0 1");
-        
-        int scoreWhiteMax = evaluate(board, Side.WHITE);
-        int scoreBlackMax = evaluate(board, Side.BLACK);
-        
-        // The scores should be opposite (with same magnitude)
-        assertEquals(-scoreWhiteMax, scoreBlackMax, 5, 
-                "Changing perspective should invert the score");
-    }
-
-    @Test
     void testEmptyBoard_ExceptKings() throws Exception {
         // Only kings on the board - should be equal
         Board board = new Board();
         board.loadFromFen("4k3/8/8/8/8/8/8/4K3 w - - 0 1");
         
-        int scoreWhite = evaluate(board, Side.WHITE);
-        int scoreBlack = evaluate(board, Side.BLACK);
+        int scoreWhite = evaluate(board);
+        int scoreBlack = evaluate(board);
         
         // With only kings, position should be equal
         assertTrue(Math.abs(scoreWhite) < 50, 
@@ -200,12 +187,12 @@ class EvaluateMethodTest {
     }
 
     @Test
-    void testKingAndPawn_VsKing_WhiteMaximizing() throws Exception {
+    void testKingAndPawn_VsKing_WhiteOnTurn() throws Exception {
         // White: King + Pawn, Black: King only
         Board board = new Board();
         board.loadFromFen("4k3/8/8/8/8/8/4P3/4K3 w - - 0 1");
         
-        int score = evaluate(board, Side.WHITE);
+        int score = evaluate(board);
         
         // White has extra pawn, from White's perspective should be positive
         assertTrue(score > 0,

@@ -277,9 +277,9 @@ public class BestMoveCalculator {
      * Evaluate the board position from the perspective of the side to move.
      * Positive scores favor the side to move, negative scores favor the opponent.
      */
-    private int evaluate(Board board, Side maximizingPlayersSide) {
+    private int evaluate(Board board) {
         int score = 0;
-        //Side sideToMove = board.getSideToMove();
+        Side sideToMove = board.getSideToMove();
 
         // Count material for both sides
         for (Square square : Square.values()) {
@@ -291,7 +291,7 @@ public class BestMoveCalculator {
             int pieceValue = getPieceValue(piece, square);
 
             // Evaluate the board from the perspective of the one who just has done the move.
-            if (piece.getPieceSide() == maximizingPlayersSide) {
+            if (piece.getPieceSide() == sideToMove) {
                 score += pieceValue;
             } else {
                 score -= pieceValue;
@@ -455,7 +455,7 @@ public class BestMoveCalculator {
      * and
      * https://www.chessprogramming.org/Alpha-Beta
      */
-    private ResultingScoreAndBounds alphaBeta(Board board, int depth, int alpha, int beta, Side maximizingPlayersSide, final boolean isMaximizingPlayer, Consumer<ResultingScoreAndBounds> bestMoveSink, long endTime, Consumer<AtomicBoolean> abortingSink, int ply) {
+    private ResultingScoreAndBounds alphaBeta(Board board, int depth, int alpha, int beta, final boolean isMaximizingPlayer, Consumer<ResultingScoreAndBounds> bestMoveSink, long endTime, Consumer<AtomicBoolean> abortingSink, int ply) {
         if (collectDebugMoves) {
             if (debugMoveHistory.size() > 0) {
                 if (debugMoveHistory.getFirst().toString().toUpperCase().equals("F1E1")) {
@@ -468,7 +468,7 @@ public class BestMoveCalculator {
             Board compare = new Board();
             compare.loadFromFen("4k3/8/8/4q3/8/8/5KPP/4R3 b - - 0 1");
             if (board.toString().equals(compare.toString())) {
-                LOGGER.info("alphaBeta first step: {}", evaluate(board, maximizingPlayersSide));
+                LOGGER.info("alphaBeta first step: {}", evaluate(board));
             }
         }
 
@@ -476,7 +476,7 @@ public class BestMoveCalculator {
             Board compare = new Board();
             compare.loadFromFen("4k3/8/8/8/8/8/6PP/4K3 b - - 0 1");
             if (board.toString().equals(compare.toString())) {
-                LOGGER.info("alphaBeta very nice: {}", evaluate(board, maximizingPlayersSide));
+                LOGGER.info("alphaBeta very nice: {}", evaluate(board));
             }
         }
 
@@ -535,7 +535,7 @@ public class BestMoveCalculator {
 
         // Base case: use quiescence search at leaf nodes
         if (depth <= 0) {
-            int score = evaluate(board, maximizingPlayersSide);
+            int score = evaluate(board);
             /*if(!isMaximizingPlayer) {
                 score = -score;
             }*/
@@ -568,7 +568,7 @@ public class BestMoveCalculator {
                 long newPositionHash = zobristHash.computeHash(board);
                 positionHistory.add(newPositionHash);
 
-                int score = alphaBeta(board, depth - 1, alpha, beta, maximizingPlayersSide, false, bestMoveSink, endTime, abortingSink, ply + 1).getScore();
+                int score = alphaBeta(board, depth - 1, alpha, beta, false, bestMoveSink, endTime, abortingSink, ply + 1).getScore();
 
                 positionHistory.removeLast();
                 if (collectDebugMoves) {
@@ -638,7 +638,7 @@ public class BestMoveCalculator {
                 positionHistory.add(newPositionHash);
 
 
-                int score = alphaBeta(board, depth - 1, alpha, beta, maximizingPlayersSide, true, bestMoveSink, endTime, abortingSink, ply + 1).getScore();
+                int score = alphaBeta(board, depth - 1, alpha, beta, true, bestMoveSink, endTime, abortingSink, ply + 1).getScore();
 
                 positionHistory.removeLast();
                 if (collectDebugMoves) {
@@ -757,7 +757,7 @@ public class BestMoveCalculator {
                 positionHistory.add(newPositionHash);
 
                 scoreAndMoves.add(ScoreAndMove.builder()
-                        .score(alphaBeta(board, depth, alpha, beta, maximizingPlayersSide, true, bestMoveSink, endTime, abortingSink, 0))
+                        .score(alphaBeta(board, depth, alpha, beta, true, bestMoveSink, endTime, abortingSink, 0))
                         .move(move)
                         .build());
 
