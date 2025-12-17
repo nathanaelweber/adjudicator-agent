@@ -1,5 +1,7 @@
 package ch.adjudicator.agent;
 
+import ch.adjudicator.agent.positionevaluation.ResultingScoreAndBounds;
+import ch.adjudicator.agent.positionevaluation.ScoreAndMove;
 import ch.adjudicator.agent.positionevaluation.ZobristHash;
 import ch.adjudicator.client.GameInfo;
 import com.github.bhlangonijr.chesslib.Board;
@@ -433,18 +435,6 @@ public class BestMoveCalculator {
         return score;
     }
 
-    @AllArgsConstructor
-    @NoArgsConstructor
-    @Data
-    @Builder
-    private static class ResultingScoreAndBounds {
-        int score;
-        int alpha;
-        int beta;
-        Move move;
-        int ply;
-    }
-
     /**
      * Alpha-beta search with a fixed depth.
      * Inspired from:
@@ -452,7 +442,7 @@ public class BestMoveCalculator {
      * and
      * https://www.chessprogramming.org/Alpha-Beta
      */
-    private ResultingScoreAndBounds alphaBeta(Board board, Move rootMove, int depth, int alpha, int beta, Side maximizingPlayersSide, final boolean isMaximizingPlayer, Consumer<ResultingScoreAndBounds> bestMoveSink, long endTime, Consumer<AtomicBoolean> abortingSink, int ply) {
+    private ResultingScoreAndBounds alphaBeta(Board board, int depth, int alpha, int beta, Side maximizingPlayersSide, final boolean isMaximizingPlayer, Consumer<ResultingScoreAndBounds> bestMoveSink, long endTime, Consumer<AtomicBoolean> abortingSink, int ply) {
         if(collectDebugMoves) {
             if(debugMoveHistory.size() > 0) {
                 if (debugMoveHistory.getFirst().toString().toUpperCase().equals("F1E1")) {
@@ -486,7 +476,6 @@ public class BestMoveCalculator {
                     .score(DRAW_SCORE)
                     .alpha(alpha)
                     .beta(beta)
-                    .move(rootMove)
                     .ply(ply)
                     .build();
         }
@@ -518,7 +507,6 @@ public class BestMoveCalculator {
                         .score(-MATE_SCORE + movesToMate)
                         .alpha(alpha)
                         .beta(beta)
-                        .move(rootMove)
                         .ply(ply)
                         .build();
             } else {
@@ -527,7 +515,6 @@ public class BestMoveCalculator {
                         .score(DRAW_SCORE)
                         .alpha(alpha)
                         .beta(beta)
-                        .move(rootMove)
                         .ply(ply)
                         .build();
             }
@@ -551,7 +538,6 @@ public class BestMoveCalculator {
                     .score(score)
                     .alpha(alpha)
                     .beta(beta)
-                    .move(rootMove)
                     .ply(ply)
                     .build();
         }
@@ -569,7 +555,7 @@ public class BestMoveCalculator {
                 long newPositionHash = zobristHash.computeHash(board);
                 positionHistory.add(newPositionHash);
 
-                int score = alphaBeta(board,  rootMove == null ? move : rootMove,depth - 1, alpha, beta,  maximizingPlayersSide,false, bestMoveSink, endTime, abortingSink, ply + 1).getScore();
+                int score = alphaBeta(board,depth - 1, alpha, beta,  maximizingPlayersSide,false, bestMoveSink, endTime, abortingSink, ply + 1).getScore();
 
                 positionHistory.removeLast();
                 if(collectDebugMoves) {
@@ -582,16 +568,13 @@ public class BestMoveCalculator {
                     if(score > alpha) {
                         alpha = score;
 
-                        if(rootMove != null) {
-                            bestMoveSink.accept(ResultingScoreAndBounds.builder()
-                                    .score(bestScore)
-                                    .alpha(alpha)
-                                    .beta(beta)
-                                    .move(rootMove)
-                                    .ply(ply)
-                                    .build());
-                            LOGGER.info("Currently best move: {}", move);
-                        }
+                        bestMoveSink.accept(ResultingScoreAndBounds.builder()
+                                .score(bestScore)
+                                .alpha(alpha)
+                                .beta(beta)
+                                .ply(ply)
+                                .build());
+                        LOGGER.info("Currently best move: {}", move);
                     }
                 }
 
@@ -602,7 +585,6 @@ public class BestMoveCalculator {
                             .score(bestScore)
                             .alpha(alpha)
                             .beta(beta)
-                            .move(rootMove)
                             .ply(ply)
                             .build();
                 }
@@ -613,7 +595,6 @@ public class BestMoveCalculator {
                             .score(bestScore)
                             .alpha(alpha)
                             .beta(beta)
-                            .move(rootMove)
                             .ply(ply)
                             .build();
                 }
@@ -628,7 +609,6 @@ public class BestMoveCalculator {
                     .score(bestScore)
                     .alpha(alpha)
                     .beta(beta)
-                    .move(rootMove)
                     .ply(ply)
                     .build();
         } else {
@@ -645,7 +625,7 @@ public class BestMoveCalculator {
                 positionHistory.add(newPositionHash);
 
 
-                int score = alphaBeta(board,   rootMove == null ? move : rootMove, depth - 1, alpha, beta, maximizingPlayersSide, true, bestMoveSink, endTime, abortingSink, ply + 1).getScore();
+                int score = alphaBeta(board, depth - 1, alpha, beta, maximizingPlayersSide, true, bestMoveSink, endTime, abortingSink, ply + 1).getScore();
 
                 positionHistory.removeLast();
                 if(collectDebugMoves) {
@@ -666,7 +646,6 @@ public class BestMoveCalculator {
                             .score(score)
                             .alpha(alpha)
                             .beta(beta)
-                            .move(rootMove)
                             .ply(ply)
                             .build();
                 }
@@ -683,7 +662,6 @@ public class BestMoveCalculator {
                     .score(bestScore)
                     .alpha(alpha)
                     .beta(beta)
-                    .move(rootMove)
                     .ply(ply)
                     .build();
         }
@@ -729,8 +707,6 @@ public class BestMoveCalculator {
         
         // Iterative deepening
         for (int depth = minDepth; depth <= maxDepth; depth++) {
-        //for (int depth = 1; depth <= 5; depth++) {
-        //for (int depth = 3; depth == 3; depth++) {
             long endTime = startTime + budgetMs;
             long elapsed = System.currentTimeMillis() - startTime;
             if (elapsed >= budgetMs) {
@@ -738,36 +714,59 @@ public class BestMoveCalculator {
             }
 
             AtomicReference<List<ResultingScoreAndBounds>> thisDepthsBestMove = new AtomicReference<>(new ArrayList<>());
-            int thisDepthsBestScore = -MATE_SCORE - 1000;
-
 
             int alpha = -MATE_SCORE - 1000;
             int beta = MATE_SCORE + 1000;
 
-            boolean thisDepthIsAborted = false;
+            AtomicBoolean thisDepthIsAborted = new AtomicBoolean(false);
 
             Consumer<ResultingScoreAndBounds> bestMoveSink = (ResultingScoreAndBounds bestMoveSoFar) -> {
                 thisDepthsBestMove.get().add(bestMoveSoFar);
-                LOGGER.info("BestMoveSoFar={} score={} alpha={} beta={}", moveToLAN(bestMoveSoFar.getMove()),
+                LOGGER.info("BestMoveSoFar: score={} alpha={} beta={}",
                         bestMoveSoFar.getScore(), bestMoveSoFar.getAlpha(), bestMoveSoFar.getBeta());
             };
 
-            AtomicBoolean isSearchAborted = new AtomicBoolean(false);
-
             Consumer<AtomicBoolean> abortingSink = (AtomicBoolean _isSearchAborted) -> {
-                isSearchAborted.set(true);
                 LOGGER.info("Aborting search...");
+                thisDepthIsAborted.set(true);
             };
 
-            ResultingScoreAndBounds resultingScoreAndBounds = alphaBeta(board, null, depth, alpha, beta,
-                    maximizingPlayersSide, true, bestMoveSink, endTime, abortingSink, 0);
+            List<ScoreAndMove> scoreAndMoves = new ArrayList<>();
 
-            LOGGER.debug("Finished search... debug rootCall: resultingScoreAndBounds={}", resultingScoreAndBounds);
+            for(Move move : legalMoves) {
 
-            var bestMoveWithinResults = searchForBestMoveWithinResults(thisDepthsBestMove);
+                board.doMove(move);
+                if(collectDebugMoves) {
+                    debugMoveHistory.add(move);
+                }
+
+                long newPositionHash = zobristHash.computeHash(board);
+                positionHistory.add(newPositionHash);
+
+                scoreAndMoves.add(ScoreAndMove.builder()
+                        .score(alphaBeta(board, depth, alpha, beta, maximizingPlayersSide, true, bestMoveSink, endTime, abortingSink, 0))
+                        .build());
+
+                positionHistory.removeLast();
+                if(collectDebugMoves) {
+                    debugMoveHistory.removeLast();
+                }
+                board.undoMove();
+
+                if(thisDepthIsAborted.get()) {
+                    break;
+                }
+            }
+
+            if(thisDepthIsAborted.get()) {
+                LOGGER.debug("Finished search... depth={}", depth);
+                break;
+            }
+
+            var bestMoveWithinResults = searchForBestMoveWithinScores(scoreAndMoves);
             if(bestMoveWithinResults != null) {
                 bestMove = bestMoveWithinResults.getMove();
-                bestScore = bestMoveWithinResults.getScore();
+                bestScore = bestMoveWithinResults.getScore().getScore();
             }
 
             // If we found a mate in 1, no need to search deeper
@@ -790,39 +789,50 @@ public class BestMoveCalculator {
         return bestMove;
     }
 
-    private ResultingScoreAndBounds searchForBestMoveWithinResults(AtomicReference<List<ResultingScoreAndBounds>> thisDepthsBestMove) {
+    private ScoreAndMove searchForBestMoveWithinScores(List<ScoreAndMove> scores) {
+        ScoreAndMove bestMoveSoFar = scores.getFirst();
+        for(ScoreAndMove score : scores) {
+            if(score.getScore().getScore() > bestMoveSoFar.getScore().getScore()) {
+                bestMoveSoFar = score;
+            }
+        }
+        return bestMoveSoFar;
+    }
+
+    private ScoreAndMove searchForBestMoveWithinResults(AtomicReference<List<ScoreAndMove>> thisDepthsBestMove) {
         var results = thisDepthsBestMove.get();
         int maxPly = 0;
-        ResultingScoreAndBounds bestMoveSoFar = null;
+        ScoreAndMove bestMoveSoFar = null;
 
-        List<ResultingScoreAndBounds> resultsWithSanitizedAlphaSmallerThanMinBetaForSameMove = new ArrayList<>();
+        List<ScoreAndMove> resultsWithSanitizedAlphaSmallerThanMinBetaForSameMove = new ArrayList<>();
 
-        for(ResultingScoreAndBounds result : results) {
-            ResultingScoreAndBounds minBeta = result;
-            for(ResultingScoreAndBounds minBetaCandidate : results) {
-                if(result.getPly() == minBetaCandidate.getPly() && result.getMove() == minBetaCandidate.getMove()) {
-                    if(minBetaCandidate.getBeta() < minBeta.getBeta()) {
+        for(ScoreAndMove result : results) {
+            ScoreAndMove minBeta = result;
+            for(ScoreAndMove minBetaCandidate : results) {
+                if(result.getScore().getPly() == minBetaCandidate.getScore().getPly() && result.getMove() == minBetaCandidate.getMove()) {
+                    if(minBetaCandidate.getScore().getBeta() < minBeta.getScore().getBeta()) {
                         minBeta = minBetaCandidate;
                     }
                 }
             }
-            if(result.getAlpha() > minBeta.getBeta()) {
+            if(result.getScore().getAlpha() > minBeta.getScore().getBeta()) {
                 resultsWithSanitizedAlphaSmallerThanMinBetaForSameMove.add(result);
             }
         }
 
-        for(ResultingScoreAndBounds result : resultsWithSanitizedAlphaSmallerThanMinBetaForSameMove) {
-            if(result.getPly() >= maxPly) {
+        for(ScoreAndMove result : resultsWithSanitizedAlphaSmallerThanMinBetaForSameMove) {
+            if(result.getScore().getPly() >= maxPly) {
                 if(bestMoveSoFar != null) {
-                    if(result.getScore() > bestMoveSoFar.getScore()) {
+                    if(result.getScore().getScore() > bestMoveSoFar.getScore().getScore()) {
                         bestMoveSoFar = result;
                     }
                 } else {
                     bestMoveSoFar = result;
                 }
-                maxPly = result.getPly();
+                maxPly = result.getScore().getPly();
             }
         }
+        LOGGER.info("bestMove selected is: bestMove={}", bestMoveSoFar);
         return bestMoveSoFar;
     }
 
