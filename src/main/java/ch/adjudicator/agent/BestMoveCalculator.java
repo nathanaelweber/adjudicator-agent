@@ -290,9 +290,9 @@ public class BestMoveCalculator {
             
             // Evaluate the board from the perspective of the one who just has done the move.
             if (piece.getPieceSide() == maximizingPlayersSide) {
-                score -= pieceValue;
-            } else {
                 score += pieceValue;
+            } else {
+                score -= pieceValue;
             }
         }
         
