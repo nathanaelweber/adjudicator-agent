@@ -18,6 +18,9 @@ import org.slf4j.LoggerFactory;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 
 import static ch.adjudicator.agent.positionevaluation.Score.DRAW_SCORE;
 
@@ -281,9 +284,9 @@ public class BestMoveCalculator {
             
             // Evaluate the board from the perspective of the one who just has done the move.
             if (piece.getPieceSide() == sideToMove) {
-                score -= pieceValue;
-            } else {
                 score += pieceValue;
+            } else {
+                score -= pieceValue;
             }
         }
         
@@ -400,78 +403,6 @@ public class BestMoveCalculator {
         }
     }
 
-
-    /**
-     * Quiescence search to handle tactical sequences (captures).
-     */
-    private Score quiescence(Board board, Side maximizingPlayersSide,  Score alpha, Score beta, int ply) {
-        // Stand-pat score
-        {
-            Board compare = new Board();
-            compare.loadFromFen("4k3/8/8/4q3/8/8/5KPP/4R3 b - - 0 1");
-            if (board.toString().equals(compare.toString())) {
-                LOGGER.info("quiescence first step: {}", evaluate(board, maximizingPlayersSide));
-            }
-        }
-
-        {
-            Board compare = new Board();
-            compare.loadFromFen("4k3/8/8/8/8/8/6PP/4K3 b - - 0 1");
-            if (board.toString().equals(compare.toString())) {
-                LOGGER.info("quiescence very nice: {}", evaluate(board, maximizingPlayersSide));
-            }
-        }
-
-        Score bestValue = evaluate(board, maximizingPlayersSide);
-        
-        if (bestValue.compareTo(beta) >= 0) {
-            return beta;
-        }
-        if (alpha.compareTo(bestValue) < 0) {
-            alpha = bestValue;
-        }
-        
-        // Generate and search only tactical moves (captures and promotions)
-        List<Move> legalMoves = board.legalMoves();
-        List<Move> tacticalMoves = new ArrayList<>();
-        
-        for (Move move : legalMoves) {
-            // Check if it's a capture or promotion
-            Piece capturedPiece = board.getPiece(move.getTo());
-            boolean isCapture = capturedPiece != Piece.NONE;
-            boolean isPromotion = move.getPromotion() != Piece.NONE;
-            
-            if (isCapture || isPromotion) {
-                tacticalMoves.add(move);
-            }
-        }
-        
-        // Sort tactical moves by MVV-LVA (Most Valuable Victim - Least Valuable Attacker)
-        tacticalMoves.sort((m1, m2) -> {
-            int score1 = getMoveScore(board, m1);
-            int score2 = getMoveScore(board, m2);
-            return Integer.compare(score2, score1);
-        });
-        
-        for (Move move : tacticalMoves) {
-            board.doMove(move);
-            Score score = quiescence(board, maximizingPlayersSide, beta.negate(), alpha.negate(), ply + 1).negate();
-            board.undoMove();
-            
-            if (score.compareTo(beta) >= 0) {
-                return score;
-            }
-            if(score.compareTo(bestValue) > 0) {
-                bestValue = score;
-            }
-            if (score.compareTo(alpha) > 0) {
-                alpha = score;
-            }
-        }
-        
-        return bestValue;
-    }
-    
     /**
      * Get a heuristic score for move ordering (MVV-LVA).
      */
@@ -504,6 +435,7 @@ public class BestMoveCalculator {
         Score score;
         Score alpha;
         Score beta;
+        Move move;
     }
 
     /**
@@ -513,10 +445,12 @@ public class BestMoveCalculator {
      * and
      * https://www.chessprogramming.org/Alpha-Beta
      */
-    private ResultingScoreAndBounds alphaBeta(Board board, int depth, Score alpha, Score beta, Side maximizingPlayersSide, final boolean isMaximizingPlayer, int ply) {
+    private ResultingScoreAndBounds alphaBeta(Board board, int depth, Score alpha, Score beta, Side maximizingPlayersSide, final boolean isMaximizingPlayer, Consumer<ResultingScoreAndBounds> bestMoveSink, long endTime, Consumer<AtomicBoolean> abortingSink, int ply) {
         if(collectDebugMoves) {
-            if(debugMoveHistory.getFirst().toString().toUpperCase().equals("F1E1")) {
-                LOGGER.info("Evaluate alphaBeta on depth {}: {}", depth, debugMoveHistory);
+            if(debugMoveHistory.size() > 0) {
+                if (debugMoveHistory.getFirst().toString().toUpperCase().equals("F1E1")) {
+                    LOGGER.info("Evaluate alphaBeta on depth {}: {}", depth, debugMoveHistory);
+                }
             }
         }
 
@@ -588,13 +522,15 @@ public class BestMoveCalculator {
         // Base case: use quiescence search at leaf nodes
         if (depth <= 0) {
             Score score = evaluate(board, maximizingPlayersSide);
-            if(!isMaximizingPlayer) {
+            /*if(!isMaximizingPlayer) {
                 score = score.negate();
-            }
+            }*/
             //Score score = quiescence(board, alpha, beta, ply);
             if(collectDebugMoves) {
-                if(debugMoveHistory.getFirst().toString().toUpperCase().equals("F1E1")) {
-                    LOGGER.info("Final quiescence score: {}", score);
+                if(debugMoveHistory.size() > 0) {
+                    if (debugMoveHistory.getFirst().toString().toUpperCase().equals("F1E1")) {
+                        LOGGER.info("Final quiescence score: {}", score);
+                    }
                 }
             }
             return ResultingScoreAndBounds.builder()
@@ -617,7 +553,7 @@ public class BestMoveCalculator {
                 long newPositionHash = zobristHash.computeHash(board);
                 positionHistory.add(newPositionHash);
 
-                Score score = alphaBeta(board, depth - 1, alpha, beta,  maximizingPlayersSide,false,ply + 1).getScore();
+                Score score = alphaBeta(board, depth - 1, alpha, beta,  maximizingPlayersSide,false, bestMoveSink, endTime, abortingSink, ply + 1).getScore();
 
                 positionHistory.removeLast();
                 if(collectDebugMoves) {
@@ -629,7 +565,21 @@ public class BestMoveCalculator {
                     bestScore = score.deepClone();
                     if(score.getValue() > alpha.getValue()) {
                         alpha = score.deepClone();
+                        if(ply == 0){
+                            bestMoveSink.accept(new ResultingScoreAndBounds(bestScore, alpha, beta, move));
+                            LOGGER.info("Currently best move: {}", move);
+                        }
                     }
+                }
+
+                long elapsed = System.currentTimeMillis() - endTime;
+                if (elapsed >= 0) {
+                    abortingSink.accept(new AtomicBoolean(true));
+                    return ResultingScoreAndBounds.builder()
+                            .score(bestScore.deepClone())
+                            .alpha(alpha.deepClone())
+                            .beta(beta.deepClone())
+                            .build();
                 }
 
                 // Beta cutoff - prune this branch
@@ -666,7 +616,7 @@ public class BestMoveCalculator {
                 positionHistory.add(newPositionHash);
 
 
-                Score score = alphaBeta(board, depth - 1, alpha, beta, maximizingPlayersSide, true,ply + 1).getScore();
+                Score score = alphaBeta(board, depth - 1, alpha, beta, maximizingPlayersSide, true, bestMoveSink, endTime, abortingSink, ply + 1).getScore();
 
                 positionHistory.removeLast();
                 if(collectDebugMoves) {
@@ -745,68 +695,51 @@ public class BestMoveCalculator {
         Score bestScore = Score.valueOf(-Score.MATE_SCORE - 1000);
         
         // Iterative deepening
-        for (int depth = 1; depth <= 4; depth++) {
+        for (int depth = 0; depth <= 5; depth++) {
         //for (int depth = 1; depth <= 5; depth++) {
         //for (int depth = 3; depth == 3; depth++) {
+            long endTime = startTime + budgetMs;
             long elapsed = System.currentTimeMillis() - startTime;
             if (elapsed >= budgetMs) {
                 break;
             }
 
-            Move thisDepthsBestMove = bestMove;
+            AtomicReference<Move> thisDepthsBestMove = new AtomicReference<>(bestMove);
             Score thisDepthsBestScore = Score.valueOf(-Score.MATE_SCORE - 1000);
+
+
+            Score alpha = Score.valueOf(-Score.MATE_SCORE - 1000);
+            Score beta = Score.valueOf(Score.MATE_SCORE + 1000);
 
             boolean thisDepthIsAborted = false;
 
-            for (Move move : legalMoves) {
-                board.doMove(move);
-                if(collectDebugMoves) {
-                    debugMoveHistory.add(move);
-                }
-                Score alpha = Score.valueOf(-Score.MATE_SCORE - 1000);
-                Score beta = Score.valueOf(Score.MATE_SCORE + 1000);
+            Consumer<ResultingScoreAndBounds> bestMoveSink = (ResultingScoreAndBounds bestMoveSoFar) -> {
+                thisDepthsBestMove.set(bestMoveSoFar.getMove());
+                LOGGER.info("BestMoveSoFar={} score={} alpha={} beta={}", moveToLAN(bestMoveSoFar.getMove()),
+                        bestMoveSoFar.getScore(), bestMoveSoFar.getAlpha(), bestMoveSoFar.getBeta());
+            };
 
-                ResultingScoreAndBounds resultingScoreAndBounds = alphaBeta(board, depth - 1, alpha, beta, maximizingPlayersSide, true,1);
-                Score score = resultingScoreAndBounds.getScore();
-                LOGGER.info("Tracing... [{}] Depth {} move {}: {}", name, depth, moveToLAN(move), resultingScoreAndBounds);
+            AtomicBoolean isSearchAborted = new AtomicBoolean(false);
 
-                if(collectDebugMoves) {
-                    debugMoveHistory.removeLast();
-                }
-                board.undoMove();
+            Consumer<AtomicBoolean> abortingSink = (AtomicBoolean _isSearchAborted) -> {
+                isSearchAborted.set(true);
+                LOGGER.info("Aborting search...");
+            };
 
-                /*if(depth %2 == 0) {
-                    score = score.negate();
-                }*/
-                
-                if (score.getValue() > thisDepthsBestScore.getValue()) {
-                    thisDepthsBestScore = score;
-                    thisDepthsBestMove = move;
-                }
-                
-                // Check time
-                elapsed = System.currentTimeMillis() - startTime;
-                if (elapsed >= budgetMs) {
-                    thisDepthIsAborted = true;
-                    break;
-                }
-                
-                // If we found a forced mate, we can stop searching this depth
-                // (we'll still complete higher depths if time allows to find shorter mates)
-                /*if (thisDepthsBestScore.isWinningMate()) {
-                    LOGGER.info("[{}] Found forced mate at depth {}: {}", name, depth, thisDepthsBestScore);
-                    break;
-                }*/
-            }
+            ResultingScoreAndBounds resultingScoreAndBounds = alphaBeta(board, depth, alpha, beta,
+                    maximizingPlayersSide, true, bestMoveSink, endTime, abortingSink, 0);
+
+            LOGGER.debug("Finished search... debug rootCall: resultingScoreAndBounds={}", resultingScoreAndBounds);
 
             if(!thisDepthIsAborted) {
-                bestMove = thisDepthsBestMove;
+                bestMove = thisDepthsBestMove.get();
                 bestScore = thisDepthsBestScore;
                 LOGGER.debug("[{}] Depth {} completed, best move: {}, score: {}",
                         name, depth, moveToLAN(bestMove), bestScore);
             } else {
                 LOGGER.debug("[{}] Depth {} unfinished, best move from last depth: {}, score: {}",
                         name, depth, moveToLAN(bestMove), bestScore);
+                return bestMove;
             }
 
             // If we found a mate in 1, no need to search deeper

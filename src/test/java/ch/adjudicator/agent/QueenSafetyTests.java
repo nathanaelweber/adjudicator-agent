@@ -87,7 +87,7 @@ class QueenSafetyTests {
         Board board = new Board();
         board.loadFromFen("4k3/8/8/4q3/8/8/5KPP/5R2 w - - 0 1");
 
-        Move bestMove = calculator.computeBestMove(board, 400000);
+        Move bestMove = calculator.computeBestMove(board, 30000);
 
         assertNotNull(bestMove, "Should find best move");
         // In this position, white should pin the opponent queen with one of the ground rooks
