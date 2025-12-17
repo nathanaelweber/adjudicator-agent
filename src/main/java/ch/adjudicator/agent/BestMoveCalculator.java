@@ -42,7 +42,7 @@ public class BestMoveCalculator {
     // Transposition Table constants
     private static final int TT_SIZE = 1 << 20; // 1M entries (~64MB with 64 bytes per entry)
     private static final int TT_MASK = TT_SIZE - 1;
-    
+
     // TT node types
     private static final byte TT_EXACT = 0;
     private static final byte TT_ALPHA = 1;
@@ -54,7 +54,7 @@ public class BestMoveCalculator {
 
     // Transposition Table
     private TranspositionTableEntry[] transpositionTable;
-    
+
     // Position history for repetition detection
     private List<Long> positionHistory;
     private List<Move> debugMoveHistory;
@@ -74,15 +74,15 @@ public class BestMoveCalculator {
         for (int i = 0; i < TT_SIZE; i++) {
             transpositionTable[i] = new TranspositionTableEntry();
         }
-        
+
         // Initialize Zobrist hashing
         zobristHash = new ZobristHash();
-        
+
         // Initialize position history for repetition detection
         positionHistory = new ArrayList<>();
 
         debugMoveHistory = new ArrayList<>();
-        
+
         // Try to load opening book from docs directory
         try {
             Path bookPath = Paths.get("docs", "Perfect_2021", "BIN", "Perfect2021.bin");
@@ -105,11 +105,11 @@ public class BestMoveCalculator {
         return lastMoveWasFromBook;
     }
 
-    public Move computeBestMove(Board searchBoard, int yourTimeMs) throws Exception{
+    public Move computeBestMove(Board searchBoard, int yourTimeMs) throws Exception {
         return computeBestMove(searchBoard, yourTimeMs, 0, 30);
     }
 
-    public Move computeBestMove(Board searchBoard, int yourTimeMs, int minDepth, int maxDepth) throws Exception{
+    public Move computeBestMove(Board searchBoard, int yourTimeMs, int minDepth, int maxDepth) throws Exception {
         try {
             // Check opening book first
             lastMoveWasFromBook = false;
@@ -122,7 +122,7 @@ public class BestMoveCalculator {
                 }
                 LOGGER.info("[{}] Position not in opening book, starting search", name);
             }
-            
+
             // Compute time budget
             int yourTime = Math.max(0, yourTimeMs);
             long budgetMs = computeTimeBudget(searchBoard, yourTime, incrementMs);
@@ -147,7 +147,7 @@ public class BestMoveCalculator {
             if (bestMove == null) {
                 throw new Exception("No legal moves available");
             }
-            
+
             LOGGER.info("[{}] Selected move: {}", name, moveToLAN(bestMove));
             return bestMove;
 
@@ -174,43 +174,43 @@ public class BestMoveCalculator {
         // Note: board.getBackup() tracks moves made during THIS session, not total game moves.
         // For positions loaded from FEN (tests), this will be 0, so we use a conservative default.
         int moveNumber = board.getBackup().size() / 2; // Approximate move number in this session
-        
+
         // If no moves in backup (FEN position or fresh start), assume we're at move 20 (mid-game)
         // This gives reasonable time allocation for test positions
         if (moveNumber == 0) {
             moveNumber = 20;
         }
-        
+
         int estimatedMovesRemaining = Math.max(10, 40 - moveNumber);
-        
+
         // Detect game phase based on material count
         int totalPieceCount = countPieces(board);
         GamePhase phase = detectGamePhase(totalPieceCount);
-        
+
         // Base allocation: divide remaining time by estimated moves, plus increment
         long baseAllocation = remainingMs / Math.max(1, estimatedMovesRemaining) + incMs;
-        
+
         // Apply phase-dependent multiplier
         double phaseMultiplier = switch (phase) {
             case OPENING -> 0.5;      // Use less time in opening (rely on book/theory)
             case MIDDLEGAME -> 1.5;   // Use more time in complex middlegame
             case ENDGAME -> 1.0;      // Normal time in endgame
         };
-        
+
         long budget = (long) (baseAllocation * phaseMultiplier);
-        
+
         // Safety bounds: never use less than 50ms, never more than 40% of remaining time
         long minBudget = 50L;
         long maxBudget = Math.max(100L, remainingMs * 2L / 5L); // 40% max
-        
+
         // Extra conservatism in time trouble (< 10 seconds)
         if (remainingMs < 10000) {
             maxBudget = Math.min(maxBudget, remainingMs / 5L); // Only use 20% in time trouble
         }
-        
+
         return Math.max(minBudget, Math.min(budget, maxBudget));
     }
-    
+
     /**
      * Count total number of pieces on the board (excluding kings).
      */
@@ -225,7 +225,7 @@ public class BestMoveCalculator {
         }
         return count;
     }
-    
+
     /**
      * Detect game phase based on piece count.
      */
@@ -260,7 +260,7 @@ public class BestMoveCalculator {
     public void clearSearchHelpers() {
         // Clear position history for new game
         positionHistory.clear();
-        
+
         // Clear transposition table to avoid contamination between searches
         for (int i = 0; i < TT_SIZE; i++) {
             transpositionTable[i] = new TranspositionTableEntry();
@@ -280,16 +280,16 @@ public class BestMoveCalculator {
     private int evaluate(Board board, Side maximizingPlayersSide) {
         int score = 0;
         //Side sideToMove = board.getSideToMove();
-        
+
         // Count material for both sides
         for (Square square : Square.values()) {
             if (square == Square.NONE) continue;
-            
+
             Piece piece = board.getPiece(square);
             if (piece == Piece.NONE) continue;
-            
+
             int pieceValue = getPieceValue(piece, square);
-            
+
             // Evaluate the board from the perspective of the one who just has done the move.
             if (piece.getPieceSide() == maximizingPlayersSide) {
                 score += pieceValue;
@@ -297,54 +297,67 @@ public class BestMoveCalculator {
                 score -= pieceValue;
             }
         }
-        
+
         return score;
     }
 
     /**
      * Get the material value of a piece in centipawns, including positional bonuses.
      * Positional bonuses are based on piece-square tables from chess theory.
-     * 
-     * @param piece The piece to evaluate
+     *
+     * @param piece  The piece to evaluate
      * @param square The square where the piece is located
      * @return The value of the piece including positional adjustment
      */
     private int getPieceValue(Piece piece, Square square) {
         int baseValue;
         switch (piece.getPieceType()) {
-            case PAWN: baseValue = PAWN_VALUE; break;
-            case KNIGHT: baseValue = KNIGHT_VALUE; break;
-            case BISHOP: baseValue = BISHOP_VALUE; break;
-            case ROOK: baseValue = ROOK_VALUE; break;
-            case QUEEN: baseValue = QUEEN_VALUE; break;
-            case KING: baseValue = KING_VALUE; break;
-            default: return 0;
+            case PAWN:
+                baseValue = PAWN_VALUE;
+                break;
+            case KNIGHT:
+                baseValue = KNIGHT_VALUE;
+                break;
+            case BISHOP:
+                baseValue = BISHOP_VALUE;
+                break;
+            case ROOK:
+                baseValue = ROOK_VALUE;
+                break;
+            case QUEEN:
+                baseValue = QUEEN_VALUE;
+                break;
+            case KING:
+                baseValue = KING_VALUE;
+                break;
+            default:
+                return 0;
         }
-        
+
         // Add positional bonus based on piece type and square
         int positionalBonus = getPositionalBonus(piece, square);
         return baseValue + positionalBonus;
     }
-    
+
     /**
      * Get positional bonus for a piece on a given square.
      * Based on standard chess piece-square tables.
      * Positive values indicate better squares for the piece.
-     * 
-     * @param piece The piece
+     *
+     * @param piece  The piece
      * @param square The square
      * @return Positional bonus in centipawns
      */
     private int getPositionalBonus(Piece piece, Square square) {
         if (square == Square.NONE) return 0;
-        
+
         int rank = square.getRank().ordinal(); // 0 = Rank 1, 7 = Rank 8
         int file = square.getFile().ordinal(); // 0 = File A, 7 = File H
-        
+
         // Adjust rank based on piece color (White prefers advancing, Black prefers back ranks)
         Side side = piece.getPieceSide();
         int adjustedRank = (side == Side.WHITE) ? rank : (7 - rank);
-        
+
         switch (piece.getPieceType()) {
             case PAWN:
                 // Pawns gain value as they advance toward promotion
@@ -355,7 +368,7 @@ public class BestMoveCalculator {
                     pawnBonus += 5;
                 }
                 return pawnBonus;
-                
+
             case KNIGHT:
                 // Knights prefer central squares and lose value on edges
                 // Better in middlegame, so central control is key
@@ -369,7 +382,7 @@ public class BestMoveCalculator {
                     knightBonus += 10;
                 }
                 return knightBonus;
-                
+
             case BISHOP:
                 // Bishops prefer central activity and open diagonals
                 int bishopBonus = 0;
@@ -378,7 +391,7 @@ public class BestMoveCalculator {
                     bishopBonus += 5;
                 }
                 return bishopBonus;
-                
+
             case ROOK:
                 // Rooks prefer 7th rank (attacking pawns) and open files
                 int rookBonus = 0;
@@ -386,13 +399,13 @@ public class BestMoveCalculator {
                     rookBonus += 10;
                 }
                 return rookBonus;
-                
+
             case QUEEN:
                 // Queen doesn't have strong positional preferences
                 // Slight penalty for early development
                 if (adjustedRank == 0) return -5;
                 return 0;
-                
+
             case KING:
                 // King safety: prefer back rank in opening/middlegame
                 // This is simplified; real engines consider pawn shield, etc.
@@ -405,7 +418,7 @@ public class BestMoveCalculator {
                     kingBonus += 5;
                 }
                 return kingBonus;
-                
+
             default:
                 return 0;
         }
@@ -416,7 +429,7 @@ public class BestMoveCalculator {
      */
     private int getMoveScore(Board board, Move move) {
         int score = 0;
-        
+
         // Capture value: victim value - attacker value / 10
         Piece capturedPiece = board.getPiece(move.getTo());
         if (capturedPiece != Piece.NONE) {
@@ -426,12 +439,12 @@ public class BestMoveCalculator {
                 score -= getPieceValue(attacker, move.getFrom());
             }
         }
-        
+
         // Promotion bonus
         if (move.getPromotion() != Piece.NONE) {
             score += getPieceValue(move.getPromotion(), move.getTo()) * 10;
         }
-        
+
         return score;
     }
 
@@ -443,8 +456,8 @@ public class BestMoveCalculator {
      * https://www.chessprogramming.org/Alpha-Beta
      */
     private ResultingScoreAndBounds alphaBeta(Board board, int depth, int alpha, int beta, Side maximizingPlayersSide, final boolean isMaximizingPlayer, Consumer<ResultingScoreAndBounds> bestMoveSink, long endTime, Consumer<AtomicBoolean> abortingSink, int ply) {
-        if(collectDebugMoves) {
-            if(debugMoveHistory.size() > 0) {
+        if (collectDebugMoves) {
+            if (debugMoveHistory.size() > 0) {
                 if (debugMoveHistory.getFirst().toString().toUpperCase().equals("F1E1")) {
                     LOGGER.info("Evaluate alphaBeta on depth {}: {}", depth, debugMoveHistory);
                 }
@@ -466,10 +479,10 @@ public class BestMoveCalculator {
                 LOGGER.info("alphaBeta very nice: {}", evaluate(board, maximizingPlayersSide));
             }
         }
-        
+
         // Compute position hash
         long positionHash = zobristHash.computeHash(board);
-        
+
         // Check for repetition (3-fold repetition is a draw)
         if (isRepetition(positionHash)) {
             return ResultingScoreAndBounds.builder()
@@ -495,7 +508,7 @@ public class BestMoveCalculator {
                 return beta;
             }
         }*/
-        
+
         // Check if position is terminal (checkmate, stalemate)
         List<Move> legalMoves = board.legalMoves();
         if (legalMoves.isEmpty()) {
@@ -519,7 +532,7 @@ public class BestMoveCalculator {
                         .build();
             }
         }
-        
+
         // Base case: use quiescence search at leaf nodes
         if (depth <= 0) {
             int score = evaluate(board, maximizingPlayersSide);
@@ -527,8 +540,8 @@ public class BestMoveCalculator {
                 score = -score;
             }*/
             //int score = quiescence(board, alpha, beta, ply);
-            if(collectDebugMoves) {
-                if(debugMoveHistory.size() > 0) {
+            if (collectDebugMoves) {
+                if (debugMoveHistory.size() > 0) {
                     if (debugMoveHistory.getFirst().toString().toUpperCase().equals("F1E1")) {
                         LOGGER.info("Final quiescence score: {}", score);
                     }
@@ -542,30 +555,30 @@ public class BestMoveCalculator {
                     .build();
         }
 
-        if(isMaximizingPlayer) {
+        if (isMaximizingPlayer) {
             int bestScore = -MATE_SCORE - 1000;
             Move bestMove = null;
 
             for (Move move : legalMoves) {
                 board.doMove(move);
-                if(collectDebugMoves) {
+                if (collectDebugMoves) {
                     debugMoveHistory.add(move);
                 }
 
                 long newPositionHash = zobristHash.computeHash(board);
                 positionHistory.add(newPositionHash);
 
-                int score = alphaBeta(board,depth - 1, alpha, beta,  maximizingPlayersSide,false, bestMoveSink, endTime, abortingSink, ply + 1).getScore();
+                int score = alphaBeta(board, depth - 1, alpha, beta, maximizingPlayersSide, false, bestMoveSink, endTime, abortingSink, ply + 1).getScore();
 
                 positionHistory.removeLast();
-                if(collectDebugMoves) {
+                if (collectDebugMoves) {
                     debugMoveHistory.removeLast();
                 }
                 board.undoMove();
 
-                if(score > bestScore) {
+                if (score > bestScore) {
                     bestScore = score;
-                    if(score > alpha) {
+                    if (score > alpha) {
                         alpha = score;
 
                         bestMoveSink.accept(ResultingScoreAndBounds.builder()
@@ -617,7 +630,7 @@ public class BestMoveCalculator {
 
             for (Move move : legalMoves) {
                 board.doMove(move);
-                if(collectDebugMoves) {
+                if (collectDebugMoves) {
                     debugMoveHistory.add(move);
                 }
 
@@ -628,14 +641,14 @@ public class BestMoveCalculator {
                 int score = alphaBeta(board, depth - 1, alpha, beta, maximizingPlayersSide, true, bestMoveSink, endTime, abortingSink, ply + 1).getScore();
 
                 positionHistory.removeLast();
-                if(collectDebugMoves) {
+                if (collectDebugMoves) {
                     debugMoveHistory.removeLast();
                 }
                 board.undoMove();
 
-                if(score < bestScore) {
+                if (score < bestScore) {
                     bestScore = score;
-                    if(score < beta) {
+                    if (score < beta) {
                         beta = score;
                     }
                 }
@@ -666,7 +679,7 @@ public class BestMoveCalculator {
                     .build();
         }
     }
-    
+
     /**
      * Check if current position is a repetition (2-fold or more in search tree)
      */
@@ -691,7 +704,7 @@ public class BestMoveCalculator {
         if (legalMoves.isEmpty()) {
             return null;
         }
-        
+
         // Sort moves by a simple heuristic to improve move ordering
         legalMoves.sort((m1, m2) -> {
             int score1 = getMoveScore(board, m1);
@@ -700,11 +713,11 @@ public class BestMoveCalculator {
         });
 
         Side maximizingPlayersSide = board.getSideToMove();
-        
+
         Move bestMove = legalMoves.get(0);
         long startTime = System.currentTimeMillis();
         int bestScore = -MATE_SCORE - 1000;
-        
+
         // Iterative deepening
         for (int depth = minDepth; depth <= maxDepth; depth++) {
             long endTime = startTime + budgetMs;
@@ -733,10 +746,10 @@ public class BestMoveCalculator {
 
             List<ScoreAndMove> scoreAndMoves = new ArrayList<>();
 
-            for(Move move : legalMoves) {
+            for (Move move : legalMoves) {
 
                 board.doMove(move);
-                if(collectDebugMoves) {
+                if (collectDebugMoves) {
                     debugMoveHistory.add(move);
                 }
 
@@ -745,26 +758,29 @@ public class BestMoveCalculator {
 
                 scoreAndMoves.add(ScoreAndMove.builder()
                         .score(alphaBeta(board, depth, alpha, beta, maximizingPlayersSide, true, bestMoveSink, endTime, abortingSink, 0))
+                        .move(move)
                         .build());
 
                 positionHistory.removeLast();
-                if(collectDebugMoves) {
+                if (collectDebugMoves) {
                     debugMoveHistory.removeLast();
                 }
                 board.undoMove();
 
-                if(thisDepthIsAborted.get()) {
+                if (thisDepthIsAborted.get()) {
                     break;
                 }
             }
 
-            if(thisDepthIsAborted.get()) {
-                LOGGER.debug("Finished search... depth={}", depth);
+            if (thisDepthIsAborted.get()) {
+                LOGGER.debug("Unfinished search... depth={}", depth);
                 break;
             }
 
+            LOGGER.debug("Finished search for this depth={}", depth);
+
             var bestMoveWithinResults = searchForBestMoveWithinScores(scoreAndMoves);
-            if(bestMoveWithinResults != null) {
+            if (bestMoveWithinResults != null) {
                 bestMove = bestMoveWithinResults.getMove();
                 bestScore = bestMoveWithinResults.getScore().getScore();
             }
@@ -778,21 +794,21 @@ public class BestMoveCalculator {
                     break;
                 }
             }
-            
+
             // Stop if time is up
             elapsed = System.currentTimeMillis() - startTime;
             if (elapsed >= budgetMs) {
                 break;
             }
         }
-        
+
         return bestMove;
     }
 
     private ScoreAndMove searchForBestMoveWithinScores(List<ScoreAndMove> scores) {
         ScoreAndMove bestMoveSoFar = scores.getFirst();
-        for(ScoreAndMove score : scores) {
-            if(score.getScore().getScore() > bestMoveSoFar.getScore().getScore()) {
+        for (ScoreAndMove score : scores) {
+            if (score.getScore().getScore() > bestMoveSoFar.getScore().getScore()) {
                 bestMoveSoFar = score;
             }
         }
@@ -806,24 +822,24 @@ public class BestMoveCalculator {
 
         List<ScoreAndMove> resultsWithSanitizedAlphaSmallerThanMinBetaForSameMove = new ArrayList<>();
 
-        for(ScoreAndMove result : results) {
+        for (ScoreAndMove result : results) {
             ScoreAndMove minBeta = result;
-            for(ScoreAndMove minBetaCandidate : results) {
-                if(result.getScore().getPly() == minBetaCandidate.getScore().getPly() && result.getMove() == minBetaCandidate.getMove()) {
-                    if(minBetaCandidate.getScore().getBeta() < minBeta.getScore().getBeta()) {
+            for (ScoreAndMove minBetaCandidate : results) {
+                if (result.getScore().getPly() == minBetaCandidate.getScore().getPly() && result.getMove() == minBetaCandidate.getMove()) {
+                    if (minBetaCandidate.getScore().getBeta() < minBeta.getScore().getBeta()) {
                         minBeta = minBetaCandidate;
                     }
                 }
             }
-            if(result.getScore().getAlpha() > minBeta.getScore().getBeta()) {
+            if (result.getScore().getAlpha() > minBeta.getScore().getBeta()) {
                 resultsWithSanitizedAlphaSmallerThanMinBetaForSameMove.add(result);
             }
         }
 
-        for(ScoreAndMove result : resultsWithSanitizedAlphaSmallerThanMinBetaForSameMove) {
-            if(result.getScore().getPly() >= maxPly) {
-                if(bestMoveSoFar != null) {
-                    if(result.getScore().getScore() > bestMoveSoFar.getScore().getScore()) {
+        for (ScoreAndMove result : resultsWithSanitizedAlphaSmallerThanMinBetaForSameMove) {
+            if (result.getScore().getPly() >= maxPly) {
+                if (bestMoveSoFar != null) {
+                    if (result.getScore().getScore() > bestMoveSoFar.getScore().getScore()) {
                         bestMoveSoFar = result;
                     }
                 } else {
@@ -845,7 +861,7 @@ public class BestMoveCalculator {
         int score;
         Move bestMove;
         byte nodeType; // TT_EXACT, TT_ALPHA, or TT_BETA
-        
+
         TranspositionTableEntry() {
             this.zobristKey = 0L;
             this.depth = -1;
@@ -853,7 +869,7 @@ public class BestMoveCalculator {
             this.bestMove = null;
             this.nodeType = TT_ALPHA;
         }
-        
+
         void store(long key, int depth, int score, Move move, byte type) {
             this.zobristKey = key;
             this.depth = depth;
@@ -861,7 +877,7 @@ public class BestMoveCalculator {
             this.bestMove = move;
             this.nodeType = type;
         }
-        
+
         boolean isValid(long key, int depth) {
             return this.zobristKey == key && this.depth >= depth;
         }
