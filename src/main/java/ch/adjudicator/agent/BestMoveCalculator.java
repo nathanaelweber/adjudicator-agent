@@ -58,7 +58,7 @@ public class BestMoveCalculator {
     // Position history for repetition detection
     private List<Long> positionHistory;
     private List<Move> debugMoveHistory;
-    private boolean collectDebugMoves = true;
+    private boolean collectDebugMoves = false;
 
     // Zobrist hashing
     private ZobristHash zobristHash;
@@ -464,7 +464,7 @@ public class BestMoveCalculator {
             }
         }
 
-        {
+        /*{
             Board compare = new Board();
             compare.loadFromFen("4k3/8/8/4q3/8/8/5KPP/4R3 b - - 0 1");
             if (board.toString().equals(compare.toString())) {
@@ -478,7 +478,7 @@ public class BestMoveCalculator {
             if (board.toString().equals(compare.toString())) {
                 LOGGER.info("alphaBeta very nice: {}", evaluate(board));
             }
-        }
+        }*/
 
         // Compute position hash
         long positionHash = zobristHash.computeHash(board);
@@ -589,7 +589,7 @@ public class BestMoveCalculator {
                                 .beta(beta)
                                 .ply(ply)
                                 .build());
-                        LOGGER.info("Currently best move: {}", move);
+                        //LOGGER.info("Currently best move: {}", move);
                     }
                 }
 
@@ -714,9 +714,7 @@ public class BestMoveCalculator {
             return Integer.compare(score2, score1);
         });
 
-        Side maximizingPlayersSide = board.getSideToMove();
-
-        Move bestMove = legalMoves.get(0);
+        Move bestMove = legalMoves.getFirst();
         long startTime = System.currentTimeMillis();
         int bestScore = -MATE_SCORE - 1000;
 
@@ -736,9 +734,9 @@ public class BestMoveCalculator {
             AtomicBoolean thisDepthIsAborted = new AtomicBoolean(false);
 
             Consumer<ResultingScoreAndBounds> bestMoveSink = (ResultingScoreAndBounds bestMoveSoFar) -> {
-                thisDepthsBestMove.get().add(bestMoveSoFar);
+                /*thisDepthsBestMove.get().add(bestMoveSoFar);
                 LOGGER.info("BestMoveSoFar: score={} alpha={} beta={}",
-                        bestMoveSoFar.getScore(), bestMoveSoFar.getAlpha(), bestMoveSoFar.getBeta());
+                        bestMoveSoFar.getScore(), bestMoveSoFar.getAlpha(), bestMoveSoFar.getBeta());*/
             };
 
             Consumer<AtomicBoolean> abortingSink = (AtomicBoolean _isSearchAborted) -> {
@@ -749,9 +747,6 @@ public class BestMoveCalculator {
             List<ScoreAndMove> scoreAndMoves = new ArrayList<>();
 
             for (Move move : legalMoves) {
-                if(!move.toString().equalsIgnoreCase("f1a1")) {
-                    //continue;
-                }
 
                 board.doMove(move);
                 if (collectDebugMoves) {

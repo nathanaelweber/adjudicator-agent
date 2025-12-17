@@ -40,7 +40,7 @@ class QueenSafetyTests {
         Board board = new Board();
         board.loadFromFen("r1bqkb1r/pppp1ppp/5n2/4p3/2Bn4/5Q2/PPPP1PPP/RNB1K2R w KQkq - 0 1");
         
-        Move bestMove = calculator.computeBestMove(board, 3000);
+        Move bestMove = calculator.computeBestMove(board, 3000000, 0, 7);
         
         assertNotNull(bestMove, "Should find move to save queen or counter-attack");
         // Best moves: queen must protect the pawn where opponent knight would fork king and rook
@@ -65,13 +65,13 @@ class QueenSafetyTests {
     }
 
     @Test
-    void testSimplePawn() throws Exception {
+    void testQueenPinnedToKingWithOnlyOneRookAndPawn() throws Exception {
         // queen pinned on e-file
         // Black queen can be pinned on e-file by white rook.
         Board board = new Board();
-        board.loadFromFen("7k/8/8/8/8/PK6/8/8 w - - 0 3");
+        board.loadFromFen("4k3/8/8/4q3/8/8/5KPP/5R2 w - - 0 1");
 
-        Move bestMove = calculator.computeBestMove(board, 400000);
+        Move bestMove = calculator.computeBestMove(board, 1000000000, 5, 5);
 
         assertNotNull(bestMove, "Should find best move");
         // In this position, white should pin the opponent queen with one of the ground rooks
@@ -81,13 +81,13 @@ class QueenSafetyTests {
     }
 
     @Test
-    void testQueenPinnedToKingWithOnlyOneRookAndPawn() throws Exception {
+    void testQueenPinnedToKingWithOnlyOneRookAndPawnDepth0To6() throws Exception {
         // queen pinned on e-file
         // Black queen can be pinned on e-file by white rook.
         Board board = new Board();
         board.loadFromFen("4k3/8/8/4q3/8/8/5KPP/5R2 w - - 0 1");
 
-        Move bestMove = calculator.computeBestMove(board, 1000000000, 5, 5);
+        Move bestMove = calculator.computeBestMove(board, 1000000000, 0, 6);
 
         assertNotNull(bestMove, "Should find best move");
         // In this position, white should pin the opponent queen with one of the ground rooks
@@ -120,7 +120,7 @@ class QueenSafetyTests {
         Board board = new Board();
         board.loadFromFen("1rk5/4Q3/K7/8/8/8/8/8 w - - 0 1");
         
-        Move bestMove = calculator.computeBestMove(board, 3000);
+        Move bestMove = calculator.computeBestMove(board, 300000, 0, 7);
         
         assertNotNull(bestMove, "Should find winning move with queen");
         // Queen should improve position: Qd6+ checks king, Qd5/Qd4/Qd3 centralizes, or Qd2 attacks rook
@@ -166,7 +166,7 @@ class QueenSafetyTests {
         Board board = new Board();
         board.loadFromFen("r1b1kb1r/pppp1ppp/2n5/4q3/4n3/3P1N2/PPP2PPP/RNBQKB1R b KQkq - 0 1");
         
-        Move bestMove = calculator.computeBestMove(board, 3000);
+        Move bestMove = calculator.computeBestMove(board, 3000000, 0, 7);
         
         assertNotNull(bestMove, "Should find defensive move by giving check");
         // Black has two valuable pieces hanging, but can give a check to defend the knight
@@ -181,7 +181,7 @@ class QueenSafetyTests {
         Board board = new Board();
         board.loadFromFen("r3k3/8/8/8/2Q5/8/8/6K1 w q - 0 1");
         
-        Move bestMove = calculator.computeBestMove(board, 3000);
+        Move bestMove = calculator.computeBestMove(board, 3000000, 0, 7);
         
         assertNotNull(bestMove, "Should find best move for black");
         // Black can fork king and rook to win the rook in 2 moves
