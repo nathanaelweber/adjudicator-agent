@@ -293,4 +293,528 @@ class BitboardGeneratorTest {
                 "King on square " + square + " attacks itself");
         }
     }
+
+    // ============================================================
+    // Phase 3 Tests: White Pawn Moves
+    // ============================================================
+
+    @Test
+    void testWhitePawnSinglePush() {
+        // Pawns on e2 (12) and d2 (11), empty board
+        long pawns = (1L << 12) | (1L << 11);
+        long empty = ~0L; // All squares empty
+        
+        long moves = BitboardGenerator.getWhitePawnSinglePush(pawns, empty);
+        
+        // Should move to e3 (20) and d3 (19)
+        assertEquals(2, BitboardGenerator.bitCount(moves));
+        assertTrue((moves & (1L << 20)) != 0); // e3
+        assertTrue((moves & (1L << 19)) != 0); // d3
+    }
+
+    @Test
+    void testWhitePawnSinglePushBlocked() {
+        // Pawn on e2 (12), square e3 (20) is blocked
+        long pawns = 1L << 12;
+        long empty = ~(1L << 20); // e3 is not empty
+        
+        long moves = BitboardGenerator.getWhitePawnSinglePush(pawns, empty);
+        
+        // Should have no moves
+        assertEquals(0, BitboardGenerator.bitCount(moves));
+    }
+
+    @Test
+    void testWhitePawnDoublePush() {
+        // Pawns on e2 (12) and d2 (11), empty board
+        long pawns = (1L << 12) | (1L << 11);
+        long empty = ~0L; // All squares empty
+        
+        long moves = BitboardGenerator.getWhitePawnDoublePush(pawns, empty);
+        
+        // Should move to e4 (28) and d4 (27)
+        assertEquals(2, BitboardGenerator.bitCount(moves));
+        assertTrue((moves & (1L << 28)) != 0); // e4
+        assertTrue((moves & (1L << 27)) != 0); // d4
+    }
+
+    @Test
+    void testWhitePawnDoublePushBlockedFirstSquare() {
+        // Pawn on e2 (12), square e3 (20) is blocked
+        long pawns = 1L << 12;
+        long empty = ~(1L << 20); // e3 is not empty
+        
+        long moves = BitboardGenerator.getWhitePawnDoublePush(pawns, empty);
+        
+        // Should have no moves
+        assertEquals(0, BitboardGenerator.bitCount(moves));
+    }
+
+    @Test
+    void testWhitePawnDoublePushBlockedSecondSquare() {
+        // Pawn on e2 (12), square e4 (28) is blocked but e3 (20) is empty
+        long pawns = 1L << 12;
+        long empty = ~(1L << 28); // e4 is not empty, but e3 is empty
+        
+        long moves = BitboardGenerator.getWhitePawnDoublePush(pawns, empty);
+        
+        // Should have no moves
+        assertEquals(0, BitboardGenerator.bitCount(moves));
+    }
+
+    @Test
+    void testWhitePawnDoublePushFromWrongRank() {
+        // Pawn on e4 (28), not on starting rank
+        long pawns = 1L << 28;
+        long empty = ~0L;
+        
+        long moves = BitboardGenerator.getWhitePawnDoublePush(pawns, empty);
+        
+        // Should have no double push moves from e4
+        assertEquals(0, BitboardGenerator.bitCount(moves));
+    }
+
+    @Test
+    void testWhitePawnCaptureRight() {
+        // Pawn on e4 (28), black pieces on f5 (37) and d5 (35)
+        long pawns = 1L << 28;
+        long blackPieces = (1L << 37) | (1L << 35);
+        
+        long moves = BitboardGenerator.getWhitePawnCaptureRight(pawns, blackPieces);
+        
+        // Should capture on f5 (37)
+        assertEquals(1, BitboardGenerator.bitCount(moves));
+        assertTrue((moves & (1L << 37)) != 0); // f5
+    }
+
+    @Test
+    void testWhitePawnCaptureLeft() {
+        // Pawn on e4 (28), black pieces on f5 (37) and d5 (35)
+        long pawns = 1L << 28;
+        long blackPieces = (1L << 37) | (1L << 35);
+        
+        long moves = BitboardGenerator.getWhitePawnCaptureLeft(pawns, blackPieces);
+        
+        // Should capture on d5 (35)
+        assertEquals(1, BitboardGenerator.bitCount(moves));
+        assertTrue((moves & (1L << 35)) != 0); // d5
+    }
+
+    @Test
+    void testWhitePawnCaptureNoWrapAround() {
+        // Pawn on a4 (24), should not wrap around to h-file
+        long pawns = 1L << 24;
+        long blackPieces = (1L << 33) | (1L << 31); // b5 and h5
+        
+        long movesLeft = BitboardGenerator.getWhitePawnCaptureLeft(pawns, blackPieces);
+        
+        // Should have no left captures (would wrap to h-file)
+        assertEquals(0, BitboardGenerator.bitCount(movesLeft));
+        
+        // Pawn on h4 (31), should not wrap around to a-file
+        pawns = 1L << 31;
+        blackPieces = (1L << 40) | (1L << 38); // a5 and g5
+        
+        long movesRight = BitboardGenerator.getWhitePawnCaptureRight(pawns, blackPieces);
+        
+        // Should have no right captures (would wrap to a-file)
+        assertEquals(0, BitboardGenerator.bitCount(movesRight));
+    }
+
+    // ============================================================
+    // Phase 3 Tests: Black Pawn Moves
+    // ============================================================
+
+    @Test
+    void testBlackPawnSinglePush() {
+        // Pawns on e7 (52) and d7 (51), empty board
+        long pawns = (1L << 52) | (1L << 51);
+        long empty = ~0L; // All squares empty
+        
+        long moves = BitboardGenerator.getBlackPawnSinglePush(pawns, empty);
+        
+        // Should move to e6 (44) and d6 (43)
+        assertEquals(2, BitboardGenerator.bitCount(moves));
+        assertTrue((moves & (1L << 44)) != 0); // e6
+        assertTrue((moves & (1L << 43)) != 0); // d6
+    }
+
+    @Test
+    void testBlackPawnSinglePushBlocked() {
+        // Pawn on e7 (52), square e6 (44) is blocked
+        long pawns = 1L << 52;
+        long empty = ~(1L << 44); // e6 is not empty
+        
+        long moves = BitboardGenerator.getBlackPawnSinglePush(pawns, empty);
+        
+        // Should have no moves
+        assertEquals(0, BitboardGenerator.bitCount(moves));
+    }
+
+    @Test
+    void testBlackPawnDoublePush() {
+        // Pawns on e7 (52) and d7 (51), empty board
+        long pawns = (1L << 52) | (1L << 51);
+        long empty = ~0L; // All squares empty
+        
+        long moves = BitboardGenerator.getBlackPawnDoublePush(pawns, empty);
+        
+        // Should move to e5 (36) and d5 (35)
+        assertEquals(2, BitboardGenerator.bitCount(moves));
+        assertTrue((moves & (1L << 36)) != 0); // e5
+        assertTrue((moves & (1L << 35)) != 0); // d5
+    }
+
+    @Test
+    void testBlackPawnDoublePushBlockedFirstSquare() {
+        // Pawn on e7 (52), square e6 (44) is blocked
+        long pawns = 1L << 52;
+        long empty = ~(1L << 44); // e6 is not empty
+        
+        long moves = BitboardGenerator.getBlackPawnDoublePush(pawns, empty);
+        
+        // Should have no moves
+        assertEquals(0, BitboardGenerator.bitCount(moves));
+    }
+
+    @Test
+    void testBlackPawnDoublePushBlockedSecondSquare() {
+        // Pawn on e7 (52), square e5 (36) is blocked but e6 (44) is empty
+        long pawns = 1L << 52;
+        long empty = ~(1L << 36); // e5 is not empty, but e6 is empty
+        
+        long moves = BitboardGenerator.getBlackPawnDoublePush(pawns, empty);
+        
+        // Should have no moves
+        assertEquals(0, BitboardGenerator.bitCount(moves));
+    }
+
+    @Test
+    void testBlackPawnDoublePushFromWrongRank() {
+        // Pawn on e5 (36), not on starting rank
+        long pawns = 1L << 36;
+        long empty = ~0L;
+        
+        long moves = BitboardGenerator.getBlackPawnDoublePush(pawns, empty);
+        
+        // Should have no double push moves from e5
+        assertEquals(0, BitboardGenerator.bitCount(moves));
+    }
+
+    @Test
+    void testBlackPawnCaptureRight() {
+        // Pawn on e5 (36), white pieces on f4 (29) and d4 (27)
+        long pawns = 1L << 36;
+        long whitePieces = (1L << 29) | (1L << 27);
+        
+        long moves = BitboardGenerator.getBlackPawnCaptureRight(pawns, whitePieces);
+        
+        // Should capture on f4 (29)
+        assertEquals(1, BitboardGenerator.bitCount(moves));
+        assertTrue((moves & (1L << 29)) != 0); // f4
+    }
+
+    @Test
+    void testBlackPawnCaptureLeft() {
+        // Pawn on e5 (36), white pieces on f4 (29) and d4 (27)
+        long pawns = 1L << 36;
+        long whitePieces = (1L << 29) | (1L << 27);
+        
+        long moves = BitboardGenerator.getBlackPawnCaptureLeft(pawns, whitePieces);
+        
+        // Should capture on d4 (27)
+        assertEquals(1, BitboardGenerator.bitCount(moves));
+        assertTrue((moves & (1L << 27)) != 0); // d4
+    }
+
+    @Test
+    void testBlackPawnCaptureNoWrapAround() {
+        // Pawn on a5 (32), should not wrap around to h-file
+        long pawns = 1L << 32;
+        long whitePieces = (1L << 25) | (1L << 23); // b4 and h4
+        
+        long movesLeft = BitboardGenerator.getBlackPawnCaptureLeft(pawns, whitePieces);
+        
+        // Should have no left captures (would wrap to h-file)
+        assertEquals(0, BitboardGenerator.bitCount(movesLeft));
+        
+        // Pawn on h5 (39), should not wrap around to a-file
+        pawns = 1L << 39;
+        whitePieces = (1L << 32) | (1L << 30); // a4 and g4
+        
+        long movesRight = BitboardGenerator.getBlackPawnCaptureRight(pawns, whitePieces);
+        
+        // Should have no right captures (would wrap to a-file)
+        assertEquals(0, BitboardGenerator.bitCount(movesRight));
+    }
+
+    // ============================================================
+    // Phase 3 Tests: Rank Masks
+    // ============================================================
+
+    @Test
+    void testRank4Mask() {
+        // RANK_4 should have bits set only on the 4th rank
+        // Squares: 24-31
+        assertEquals(0x00000000FF000000L, BitboardGenerator.RANK_4);
+        assertEquals(8, BitboardGenerator.bitCount(BitboardGenerator.RANK_4));
+    }
+
+    @Test
+    void testRank5Mask() {
+        // RANK_5 should have bits set only on the 5th rank
+        // Squares: 32-39
+        assertEquals(0x000000FF00000000L, BitboardGenerator.RANK_5);
+        assertEquals(8, BitboardGenerator.bitCount(BitboardGenerator.RANK_5));
+    }
+
+    // ============================================================
+    // Phase 4 Tests: Magic Bitboards - Rook Attacks
+    // ============================================================
+
+    @Test
+    void testRookAttacksEmptyBoard() {
+        // Rook on e4 (square 28), empty board
+        long occupancy = 0L;
+        long attacks = BitboardGenerator.getRookAttacks(28, occupancy);
+        
+        // Should attack entire rank and file (14 squares: 7 on rank + 7 on file)
+        assertEquals(14, BitboardGenerator.bitCount(attacks));
+        
+        // Verify attacks along rank 4 (squares 24-31 except 28)
+        for (int sq = 24; sq <= 31; sq++) {
+            if (sq != 28) {
+                assertTrue((attacks & (1L << sq)) != 0, "Should attack square " + sq);
+            }
+        }
+        
+        // Verify attacks along file e (squares 4, 12, 20, 36, 44, 52, 60)
+        int[] fileSquares = {4, 12, 20, 36, 44, 52, 60};
+        for (int sq : fileSquares) {
+            assertTrue((attacks & (1L << sq)) != 0, "Should attack square " + sq);
+        }
+    }
+
+    @Test
+    void testRookAttacksBlocked() {
+        // Rook on e4 (square 28), blocked by pieces on e6 (44) and g4 (30)
+        long occupancy = (1L << 44) | (1L << 30);
+        long attacks = BitboardGenerator.getRookAttacks(28, occupancy);
+        
+        // Should attack up to blockers (including blocker squares)
+        assertTrue((attacks & (1L << 36)) != 0); // e5
+        assertTrue((attacks & (1L << 44)) != 0); // e6 (blocker)
+        assertFalse((attacks & (1L << 52)) != 0); // e7 (beyond blocker)
+        
+        assertTrue((attacks & (1L << 29)) != 0); // f4
+        assertTrue((attacks & (1L << 30)) != 0); // g4 (blocker)
+        assertFalse((attacks & (1L << 31)) != 0); // h4 (beyond blocker)
+    }
+
+    @Test
+    void testRookAttacksCorner() {
+        // Rook on a1 (square 0), empty board
+        long occupancy = 0L;
+        long attacks = BitboardGenerator.getRookAttacks(0, occupancy);
+        
+        // Should attack entire rank 1 and file a (14 squares)
+        assertEquals(14, BitboardGenerator.bitCount(attacks));
+        
+        // Should NOT attack the rook's own square
+        assertFalse((attacks & 1L) != 0);
+    }
+
+    @Test
+    void testRookAttacksH8() {
+        // Rook on h8 (square 63), empty board
+        long occupancy = 0L;
+        long attacks = BitboardGenerator.getRookAttacks(63, occupancy);
+        
+        // Should attack entire rank 8 and file h (14 squares)
+        assertEquals(14, BitboardGenerator.bitCount(attacks));
+        
+        // Should NOT attack the rook's own square
+        assertFalse((attacks & (1L << 63)) != 0);
+    }
+
+    @Test
+    void testRookAttacksComplexOccupancy() {
+        // Rook on d4 (square 27), multiple blockers
+        long occupancy = (1L << 35) | (1L << 19) | (1L << 26) | (1L << 29);
+        // Blockers: d5 (35), d3 (19), c4 (26), f4 (29)
+        long attacks = BitboardGenerator.getRookAttacks(27, occupancy);
+        
+        // Should include blocker squares but not squares beyond them
+        assertTrue((attacks & (1L << 35)) != 0); // d5 (blocker)
+        assertFalse((attacks & (1L << 43)) != 0); // d6 (beyond blocker)
+        
+        assertTrue((attacks & (1L << 19)) != 0); // d3 (blocker)
+        assertFalse((attacks & (1L << 11)) != 0); // d2 (beyond blocker)
+        
+        assertTrue((attacks & (1L << 26)) != 0); // c4 (blocker)
+        assertFalse((attacks & (1L << 25)) != 0); // b4 (beyond blocker)
+        
+        assertTrue((attacks & (1L << 28)) != 0); // e4
+        assertTrue((attacks & (1L << 29)) != 0); // f4 (blocker)
+        assertFalse((attacks & (1L << 30)) != 0); // g4 (beyond blocker)
+    }
+
+    // ============================================================
+    // Phase 4 Tests: Magic Bitboards - Bishop Attacks
+    // ============================================================
+
+    @Test
+    void testBishopAttacksEmptyBoard() {
+        // Bishop on e4 (square 28), empty board
+        long occupancy = 0L;
+        long attacks = BitboardGenerator.getBishopAttacks(28, occupancy);
+        
+        // Should attack all diagonals (13 squares total)
+        assertEquals(13, BitboardGenerator.bitCount(attacks));
+        
+        // Verify some diagonal squares
+        assertTrue((attacks & (1L << 19)) != 0); // d3
+        assertTrue((attacks & (1L << 10)) != 0); // c2
+        assertTrue((attacks & (1L << 1)) != 0);  // b1
+        assertTrue((attacks & (1L << 37)) != 0); // f5
+        assertTrue((attacks & (1L << 46)) != 0); // g6
+        assertTrue((attacks & (1L << 55)) != 0); // h7
+    }
+
+    @Test
+    void testBishopAttacksBlocked() {
+        // Bishop on e4 (square 28), blocked by pieces on g6 (46) and c2 (10)
+        long occupancy = (1L << 46) | (1L << 10);
+        long attacks = BitboardGenerator.getBishopAttacks(28, occupancy);
+        
+        // Should attack up to blockers (including blocker squares)
+        assertTrue((attacks & (1L << 37)) != 0); // f5
+        assertTrue((attacks & (1L << 46)) != 0); // g6 (blocker)
+        assertFalse((attacks & (1L << 55)) != 0); // h7 (beyond blocker)
+        
+        assertTrue((attacks & (1L << 19)) != 0); // d3
+        assertTrue((attacks & (1L << 10)) != 0); // c2 (blocker)
+        assertFalse((attacks & (1L << 1)) != 0); // b1 (beyond blocker)
+    }
+
+    @Test
+    void testBishopAttacksCorner() {
+        // Bishop on a1 (square 0), empty board
+        long occupancy = 0L;
+        long attacks = BitboardGenerator.getBishopAttacks(0, occupancy);
+        
+        // Should attack one diagonal only (7 squares: b2, c3, d4, e5, f6, g7, h8)
+        assertEquals(7, BitboardGenerator.bitCount(attacks));
+        
+        // Verify diagonal
+        assertTrue((attacks & (1L << 9)) != 0);  // b2
+        assertTrue((attacks & (1L << 18)) != 0); // c3
+        assertTrue((attacks & (1L << 27)) != 0); // d4
+        assertTrue((attacks & (1L << 36)) != 0); // e5
+        assertTrue((attacks & (1L << 45)) != 0); // f6
+        assertTrue((attacks & (1L << 54)) != 0); // g7
+        assertTrue((attacks & (1L << 63)) != 0); // h8
+    }
+
+    @Test
+    void testBishopAttacksH8() {
+        // Bishop on h8 (square 63), empty board
+        long occupancy = 0L;
+        long attacks = BitboardGenerator.getBishopAttacks(63, occupancy);
+        
+        // Should attack one diagonal only (7 squares: g7, f6, e5, d4, c3, b2, a1)
+        assertEquals(7, BitboardGenerator.bitCount(attacks));
+        
+        // Verify diagonal
+        assertTrue((attacks & (1L << 54)) != 0); // g7
+        assertTrue((attacks & (1L << 45)) != 0); // f6
+        assertTrue((attacks & (1L << 36)) != 0); // e5
+        assertTrue((attacks & (1L << 27)) != 0); // d4
+        assertTrue((attacks & (1L << 18)) != 0); // c3
+        assertTrue((attacks & (1L << 9)) != 0);  // b2
+        assertTrue((attacks & (1L << 0)) != 0);  // a1
+    }
+
+    @Test
+    void testBishopAttacksCenterWithOccupancy() {
+        // Bishop on d4 (square 27), multiple blockers
+        long occupancy = (1L << 36) | (1L << 18) | (1L << 20) | (1L << 34);
+        // Blockers: e5 (36), c3 (18), e3 (20), c5 (34)
+        long attacks = BitboardGenerator.getBishopAttacks(27, occupancy);
+        
+        // Should include blocker squares but not squares beyond them
+        assertTrue((attacks & (1L << 36)) != 0); // e5 (blocker)
+        assertFalse((attacks & (1L << 45)) != 0); // f6 (beyond blocker)
+        
+        assertTrue((attacks & (1L << 18)) != 0); // c3 (blocker)
+        assertFalse((attacks & (1L << 9)) != 0); // b2 (beyond blocker)
+        
+        assertTrue((attacks & (1L << 20)) != 0); // e3 (blocker)
+        assertFalse((attacks & (1L << 13)) != 0); // f2 (beyond blocker)
+        
+        assertTrue((attacks & (1L << 34)) != 0); // c5 (blocker)
+        assertFalse((attacks & (1L << 41)) != 0); // b6 (beyond blocker)
+    }
+
+    @Test
+    void testBishopAttacksEdge() {
+        // Bishop on d1 (square 3), empty board
+        long occupancy = 0L;
+        long attacks = BitboardGenerator.getBishopAttacks(3, occupancy);
+        
+        // Should attack both diagonals from edge position
+        assertTrue(BitboardGenerator.bitCount(attacks) > 0);
+        
+        // Verify some squares
+        assertTrue((attacks & (1L << 10)) != 0); // c2
+        assertTrue((attacks & (1L << 12)) != 0); // e2
+    }
+
+    // ============================================================
+    // Phase 4 Tests: Edge Cases
+    // ============================================================
+
+    @Test
+    void testRookDoesNotAttackOwnSquare() {
+        // Verify rooks never attack their own square
+        for (int square = 0; square < 64; square++) {
+            long attacks = BitboardGenerator.getRookAttacks(square, 0L);
+            long squareBit = 1L << square;
+            assertEquals(0, attacks & squareBit, 
+                "Rook on square " + square + " attacks itself");
+        }
+    }
+
+    @Test
+    void testBishopDoesNotAttackOwnSquare() {
+        // Verify bishops never attack their own square
+        for (int square = 0; square < 64; square++) {
+            long attacks = BitboardGenerator.getBishopAttacks(square, 0L);
+            long squareBit = 1L << square;
+            assertEquals(0, attacks & squareBit, 
+                "Bishop on square " + square + " attacks itself");
+        }
+    }
+
+    @Test
+    void testRookAttacksAllSquares() {
+        // Verify rook attacks can be generated for all 64 squares without error
+        for (int square = 0; square < 64; square++) {
+            long attacks = BitboardGenerator.getRookAttacks(square, 0L);
+            assertTrue(BitboardGenerator.bitCount(attacks) >= 14, 
+                "Rook on square " + square + " has invalid attack count on empty board");
+        }
+    }
+
+    @Test
+    void testBishopAttacksAllSquares() {
+        // Verify bishop attacks can be generated for all 64 squares without error
+        for (int square = 0; square < 64; square++) {
+            long attacks = BitboardGenerator.getBishopAttacks(square, 0L);
+            assertTrue(BitboardGenerator.bitCount(attacks) >= 7, 
+                "Bishop on square " + square + " has too few attacks on empty board");
+            assertTrue(BitboardGenerator.bitCount(attacks) <= 13,
+                "Bishop on square " + square + " has too many attacks on empty board");
+        }
+    }
 }

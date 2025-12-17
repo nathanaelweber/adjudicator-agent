@@ -31,16 +31,16 @@ Implementing a bitboard engine in Java requires using `long` primitives, as Java
 * [x] **Add chesslib tests** Add simple moves that are valid in the chesslib in the tests. use a new testclass named ChessLibVsGeneratorValidityTest.
 
 ### Phase 3: Set-wise Pawn Generation
-* [ ] **White Pawn Logic**:
+* [x] **White Pawn Logic**:
     * `(pawns << 8) & empty`: Single push.
     * `((push1) << 8) & empty & RANK_4`: Double push.
     * `(pawns << 7) & ~FILE_H & blackPieces`: Capture Right.
     * `(pawns << 9) & ~FILE_A & blackPieces`: Capture Left.
-* [ ] **Black Pawn Logic**: Mirror the shifts using the unsigned right shift operator `>>>`.
+* [x] **Black Pawn Logic**: Mirror the shifts using the unsigned right shift operator `>>>`.
 
 ### Phase 4: Sliding Pieces (Java Implementation)
-* [ ] **Magic Bitboard Tables**: Since Java manages memory differently, pre-allocate large `long[]` arrays for your attack tables to avoid `OutOfMemoryError` or excessive Garbage Collection during search.
-* [ ] **Magic Hashing**:
+* [x] **Magic Bitboard Tables**: Since Java manages memory differently, pre-allocate large `long[]` arrays for your attack tables to avoid `OutOfMemoryError` or excessive Garbage Collection during search.
+* [x] **Magic Hashing**:
     ```java
     public long getRookAttacks(int square, long occupancy) {
         occupancy &= rookMasks[square];
@@ -51,16 +51,16 @@ Implementing a bitboard engine in Java requires using `long` primitives, as Java
 
 
 ### Phase 5: The Move Loop & Legalization
-* [ ] **Move Encoding**: Represent moves as a simple `int` to save memory.
+* [x] **Move Encoding**: Represent moves as a simple `int` to save memory.
     * Bits 0-5: Source square.
     * Bits 6-11: Destination square.
     * Bits 12-15: Special flags (Promotion, Castling, En Passant).
-* [ ] **Make/Unmake Move**: Implement a method to update the bitboards.
+* [x] **Make/Unmake Move**: Implement a method to update the bitboards.
     * *Tip: Use XOR (`^`) to toggle piece positions. `bitboard ^= (1L << from) | (1L << to);`*
-* [ ] **Square Attacked Test**: Write a function `isSquareAttacked(int sq, int attackerColor)`. This is essential for determining if a move leaves the king in check.
+* [x] **Square Attacked Test**: Write a function `isSquareAttacked(int sq, int attackerColor)`. This is essential for determining if a move leaves the king in check.
 
 ---
 
 ### Phase 6: Performance & Testing
-* [ ] **Perft Testing**: Implement a **Perft** (Performance Test) function. This recursively counts moves to a specific depth and compares them against known values (like the "Starting Position" or "KiwiPete" position).
-* [ ] **Inlining**: Ensure your bit manipulation methods are `final` or `static` to encourage the JVM's Just-In-Time (JIT) compiler to inline them.
+* [x] **Perft Testing**: Implement a **Perft** (Performance Test) function. This recursively counts moves to a specific depth and compares them against known values (like the "Starting Position" or "KiwiPete" position).
+* [x] **Inlining**: Ensure your bit manipulation methods are `final` or `static` to encourage the JVM's Just-In-Time (JIT) compiler to inline them.
