@@ -4,6 +4,8 @@ import chess_contest.ChessContest;
 import chess_contest.ChessGameGrpc;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
+import io.grpc.Status;
+import io.grpc.StatusRuntimeException;
 import io.grpc.stub.StreamObserver;
 
 import java.util.concurrent.CountDownLatch;
@@ -129,7 +131,24 @@ public class AdjudicatorClient {
 
                         @Override
                         public void onError(Throwable t) {
-                            agent.onError("Stream error: " + t.getMessage());
+                            String errorMessage = "Stream error: " + t.getMessage();
+                            
+                            // Extract detailed gRPC error information
+                            if (t instanceof StatusRuntimeException) {
+                                StatusRuntimeException sre = (StatusRuntimeException) t;
+                                Status status = sre.getStatus();
+                                errorMessage = String.format("gRPC error [%s]: %s", 
+                                    status.getCode(), 
+                                    status.getDescription() != null ? status.getDescription() : status.getCause());
+                            }
+                            
+                            // Log the full stack trace for debugging
+                            if (t.getCause() != null) {
+                                errorMessage += " | Cause: " + t.getCause().getMessage();
+                            }
+                            
+                            agent.onError(errorMessage);
+                            
                             // Give the logging a moment to complete before closing
                             try {
                                 Thread.sleep(100);

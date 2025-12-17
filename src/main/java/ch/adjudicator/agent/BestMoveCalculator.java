@@ -2,6 +2,7 @@ package ch.adjudicator.agent;
 
 import ch.adjudicator.agent.positionevaluation.ResultingScoreAndBounds;
 import ch.adjudicator.agent.positionevaluation.ScoreAndMove;
+import ch.adjudicator.agent.positionevaluation.SimpleBoardEvaluation;
 import ch.adjudicator.agent.positionevaluation.ZobristHash;
 import ch.adjudicator.client.GameInfo;
 import com.github.bhlangonijr.chesslib.Board;
@@ -31,13 +32,7 @@ public class BestMoveCalculator {
     public static final int MAX_MATE_DISTANCE = 1000;
     public static final int DRAW_SCORE = 0;
 
-    // Material values in centipawns
-    private static final int PAWN_VALUE = 100;
-    private static final int KNIGHT_VALUE = 300;
-    private static final int BISHOP_VALUE = 300;
-    private static final int ROOK_VALUE = 500;
-    private static final int QUEEN_VALUE = 900;
-    private static final int KING_VALUE = 20000;
+
 
     // Transposition Table constants
     private static final int TT_SIZE = 1 << 20; // 1M entries (~64MB with 64 bytes per entry)
@@ -274,181 +269,6 @@ public class BestMoveCalculator {
     }
 
     /**
-     * Evaluate the board position from the perspective of the side to move.
-     * Positive scores favor the side to move, negative scores favor the opponent.
-     */
-    private int evaluate(Board board) {
-        int score = 0;
-        Side sideToMove = board.getSideToMove();
-
-        // Count material for both sides
-        for (Square square : Square.values()) {
-            if (square == Square.NONE) continue;
-
-            Piece piece = board.getPiece(square);
-            if (piece == Piece.NONE) continue;
-
-            int pieceValue = getPieceValue(piece, square);
-
-            // Evaluate the board from the perspective of the one who just has done the move.
-            if (piece.getPieceSide() == sideToMove) {
-                score += pieceValue;
-            } else {
-                score -= pieceValue;
-            }
-        }
-
-        return score;
-    }
-
-    /**
-     * Get the material value of a piece in centipawns, including positional bonuses.
-     * Positional bonuses are based on piece-square tables from chess theory.
-     *
-     * @param piece  The piece to evaluate
-     * @param square The square where the piece is located
-     * @return The value of the piece including positional adjustment
-     */
-    private int getPieceValue(Piece piece, Square square) {
-        int baseValue;
-        switch (piece.getPieceType()) {
-            case PAWN:
-                baseValue = PAWN_VALUE;
-                break;
-            case KNIGHT:
-                baseValue = KNIGHT_VALUE;
-                break;
-            case BISHOP:
-                baseValue = BISHOP_VALUE;
-                break;
-            case ROOK:
-                baseValue = ROOK_VALUE;
-                break;
-            case QUEEN:
-                baseValue = QUEEN_VALUE;
-                break;
-            case KING:
-                baseValue = KING_VALUE;
-                break;
-            default:
-                return 0;
-        }
-
-        // Add positional bonus based on piece type and square
-        int positionalBonus = getPositionalBonus(piece, square);
-        return baseValue + positionalBonus;
-    }
-
-    /**
-     * Get positional bonus for a piece on a given square.
-     * Based on standard chess piece-square tables.
-     * Positive values indicate better squares for the piece.
-     *
-     * @param piece  The piece
-     * @param square The square
-     * @return Positional bonus in centipawns
-     */
-    private int getPositionalBonus(Piece piece, Square square) {
-        if (square == Square.NONE) return 0;
-
-        int rank = square.getRank().ordinal(); // 0 = Rank 1, 7 = Rank 8
-        int file = square.getFile().ordinal(); // 0 = File A, 7 = File H
-
-        // Adjust rank based on piece color (White prefers advancing, Black prefers back ranks)
-        Side side = piece.getPieceSide();
-        int adjustedRank = (side == Side.WHITE) ? rank : (7 - rank);
-
-        switch (piece.getPieceType()) {
-            case PAWN:
-                // Pawns gain value as they advance toward promotion
-                // Central pawns are slightly more valuable
-                int pawnBonus = adjustedRank * 10; // 0 to 70 centipawns
-                // Center files (d,e = files 3,4) get small bonus
-                if (file >= 2 && file <= 5) {
-                    pawnBonus += 5;
-                }
-                return pawnBonus;
-
-            case KNIGHT:
-                // Knights prefer central squares and lose value on edges
-                // Better in middlegame, so central control is key
-                int knightBonus = 0;
-                // Penalize edge files
-                if (file == 0 || file == 7) knightBonus -= 10;
-                // Penalize back rank
-                if (adjustedRank == 0) knightBonus -= 10;
-                // Bonus for central squares (files c-f, ranks 3-6)
-                if (file >= 2 && file <= 5 && adjustedRank >= 2 && adjustedRank <= 5) {
-                    knightBonus += 10;
-                }
-                return knightBonus;
-
-            case BISHOP:
-                // Bishops prefer central activity and open diagonals
-                int bishopBonus = 0;
-                // Slight bonus for central squares
-                if (file >= 2 && file <= 5 && adjustedRank >= 2 && adjustedRank <= 5) {
-                    bishopBonus += 5;
-                }
-                return bishopBonus;
-
-            case ROOK:
-                // Rooks prefer 7th rank (attacking pawns) and open files
-                int rookBonus = 0;
-                if (adjustedRank == 6) { // 7th rank from piece's perspective
-                    rookBonus += 10;
-                }
-                return rookBonus;
-
-            case QUEEN:
-                // Queen doesn't have strong positional preferences
-                // Slight penalty for early development
-                if (adjustedRank == 0) return -5;
-                return 0;
-
-            case KING:
-                // King safety: prefer back rank in opening/middlegame
-                // This is simplified; real engines consider pawn shield, etc.
-                int kingBonus = 0;
-                if (adjustedRank <= 1) { // Back two ranks
-                    kingBonus += 10;
-                }
-                // Prefer corners/edges for safety (castled position)
-                if (file <= 2 || file >= 5) {
-                    kingBonus += 5;
-                }
-                return kingBonus;
-
-            default:
-                return 0;
-        }
-    }
-
-    /**
-     * Get a heuristic score for move ordering (MVV-LVA).
-     */
-    private int getMoveScore(Board board, Move move) {
-        int score = 0;
-
-        // Capture value: victim value - attacker value / 10
-        Piece capturedPiece = board.getPiece(move.getTo());
-        if (capturedPiece != Piece.NONE) {
-            score += getPieceValue(capturedPiece, move.getTo()) * 10;
-            Piece attacker = board.getPiece(move.getFrom());
-            if (attacker != Piece.NONE) {
-                score -= getPieceValue(attacker, move.getFrom());
-            }
-        }
-
-        // Promotion bonus
-        if (move.getPromotion() != Piece.NONE) {
-            score += getPieceValue(move.getPromotion(), move.getTo()) * 10;
-        }
-
-        return score;
-    }
-
-    /**
      * Alpha-beta search with a fixed depth.
      * Inspired from:
      * https://en.wikipedia.org/wiki/Alpha%E2%80%93beta_pruning
@@ -463,22 +283,6 @@ public class BestMoveCalculator {
                 }
             }
         }
-
-        /*{
-            Board compare = new Board();
-            compare.loadFromFen("4k3/8/8/4q3/8/8/5KPP/4R3 b - - 0 1");
-            if (board.toString().equals(compare.toString())) {
-                LOGGER.info("alphaBeta first step: {}", evaluate(board));
-            }
-        }
-
-        {
-            Board compare = new Board();
-            compare.loadFromFen("4k3/8/8/8/8/8/6PP/4K3 b - - 0 1");
-            if (board.toString().equals(compare.toString())) {
-                LOGGER.info("alphaBeta very nice: {}", evaluate(board));
-            }
-        }*/
 
         // Compute position hash
         long positionHash = zobristHash.computeHash(board);
@@ -535,7 +339,7 @@ public class BestMoveCalculator {
 
         // Base case: use quiescence search at leaf nodes
         if (depth <= 0) {
-            int score = evaluate(board);
+            int score = SimpleBoardEvaluation.evaluate(board);
             String boardFen = board.getFen();
             if(!isMaximizingPlayer) {
                 score = -score;
@@ -709,8 +513,8 @@ public class BestMoveCalculator {
 
         // Sort moves by a simple heuristic to improve move ordering
         legalMoves.sort((m1, m2) -> {
-            int score1 = getMoveScore(board, m1);
-            int score2 = getMoveScore(board, m2);
+            int score1 = SimpleBoardEvaluation.getMoveScore(board, m1);
+            int score2 = SimpleBoardEvaluation.getMoveScore(board, m2);
             return Integer.compare(score2, score1);
         });
 
@@ -726,17 +530,16 @@ public class BestMoveCalculator {
                 break;
             }
 
-            AtomicReference<List<ResultingScoreAndBounds>> thisDepthsBestMove = new AtomicReference<>(new ArrayList<>());
-
             int alpha = -MATE_SCORE - 1000;
             int beta = MATE_SCORE + 1000;
 
             AtomicBoolean thisDepthIsAborted = new AtomicBoolean(false);
 
             Consumer<ResultingScoreAndBounds> bestMoveSink = (ResultingScoreAndBounds bestMoveSoFar) -> {
-                /*thisDepthsBestMove.get().add(bestMoveSoFar);
-                LOGGER.info("BestMoveSoFar: score={} alpha={} beta={}",
-                        bestMoveSoFar.getScore(), bestMoveSoFar.getAlpha(), bestMoveSoFar.getBeta());*/
+                if(collectDebugMoves) {
+                    LOGGER.info("BestMoveSoFar: score={} alpha={} beta={}",
+                            bestMoveSoFar.getScore(), bestMoveSoFar.getAlpha(), bestMoveSoFar.getBeta());
+                }
             };
 
             Consumer<AtomicBoolean> abortingSink = (AtomicBoolean _isSearchAborted) -> {
