@@ -536,9 +536,10 @@ public class BestMoveCalculator {
         // Base case: use quiescence search at leaf nodes
         if (depth <= 0) {
             int score = evaluate(board);
-            /*if(!isMaximizingPlayer) {
+            String boardFen = board.getFen();
+            if(!isMaximizingPlayer) {
                 score = -score;
-            }*/
+            }
             //int score = quiescence(board, alpha, beta, ply);
             if (collectDebugMoves) {
                 if (debugMoveHistory.size() > 0) {
@@ -578,10 +579,11 @@ public class BestMoveCalculator {
 
                 if (score > bestScore) {
                     bestScore = score;
+
                     if (score > alpha) {
                         alpha = score;
 
-                        bestMoveSink.accept(ResultingScoreAndBounds.builder()
+                        bestMoveSink.accept(ResultingScoreAndBounds.builder() //TODO remove
                                 .score(bestScore)
                                 .alpha(alpha)
                                 .beta(beta)
@@ -603,7 +605,7 @@ public class BestMoveCalculator {
                 }
 
                 // Beta cutoff - prune this branch
-                if (bestScore > beta) {
+                if (score >= beta) {
                     return ResultingScoreAndBounds.builder()
                             .score(bestScore)
                             .alpha(alpha)
@@ -747,6 +749,9 @@ public class BestMoveCalculator {
             List<ScoreAndMove> scoreAndMoves = new ArrayList<>();
 
             for (Move move : legalMoves) {
+                if(!move.toString().equalsIgnoreCase("f1a1")) {
+                    //continue;
+                }
 
                 board.doMove(move);
                 if (collectDebugMoves) {
@@ -757,7 +762,7 @@ public class BestMoveCalculator {
                 positionHistory.add(newPositionHash);
 
                 scoreAndMoves.add(ScoreAndMove.builder()
-                        .score(alphaBeta(board, depth, alpha, beta, true, bestMoveSink, endTime, abortingSink, 0))
+                        .score(alphaBeta(board, depth, alpha, beta, true, bestMoveSink, endTime, abortingSink, 0).negateScore())
                         .move(move)
                         .build());
 

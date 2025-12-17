@@ -14,4 +14,8 @@ public class ResultingScoreAndBounds {
     int alpha;
     int beta;
     int ply;
+
+    public ResultingScoreAndBounds negateScore() {
+        return new ResultingScoreAndBounds(-score, beta, alpha, ply);
+    }
 }
