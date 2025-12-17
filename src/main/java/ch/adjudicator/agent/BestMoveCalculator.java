@@ -797,13 +797,6 @@ public class BestMoveCalculator {
 
         List<ResultingScoreAndBounds> resultsWithSanitizedAlphaSmallerThanMinBetaForSameMove = new ArrayList<>();
 
-        int maxBetaScore = -MATE_SCORE - 1000;
-        for(ResultingScoreAndBounds result : results) {
-            if(result.getBeta() > maxBetaScore) {
-                maxBetaScore = result.getBeta();
-            }
-        }
-
         for(ResultingScoreAndBounds result : results) {
             ResultingScoreAndBounds minBeta = result;
             for(ResultingScoreAndBounds minBetaCandidate : results) {
