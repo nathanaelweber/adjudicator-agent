@@ -69,3 +69,6 @@ Implementing a bitboard engine in Java requires using `long` primitives, as Java
 * [x] **Adapter for chesslib** Create an adapter which converts a fen into a BoardState. The bit representation shall match the position and representation of ch.adjudicator.agent.bitboard.generator.
 * [x] **Move adapter** Create an adapter for move operations form chesslib to a bitboard representation of the same move, and vice-versa.
 * [x] **Test for adapter** Create tests for the two adapters.
+
+### Phase 8: Bitboard legal move generation
+* [ ] **Legal moves generator** Create a new class under ch.adjudicator.agent.bitboard.adapter.generator with a method that responses with a long

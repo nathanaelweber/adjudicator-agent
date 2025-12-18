@@ -81,10 +81,6 @@ public class ChessLibAdapter {
             state.enPassantSquare = -1;
         }
         
-        // Set move counters
-        state.halfmoveClock = board.getHalfMoveCounter();
-        state.fullmoveNumber = board.getMoveCounter();
-        
         return state;
     }
 
@@ -176,13 +172,13 @@ public class ChessLibAdapter {
             Square epSquare = Square.values()[state.enPassantSquare];
             fen.append(epSquare.toString().toLowerCase());
         }
-        
-        // Halfmove clock and fullmove number
+
+        // for optimization of search, we don't care about move counter at this point
         fen.append(' ');
-        fen.append(state.halfmoveClock);
+        fen.append(0);
         fen.append(' ');
-        fen.append(state.fullmoveNumber);
-        
+        fen.append(1);
+
         return fen.toString();
     }
 
