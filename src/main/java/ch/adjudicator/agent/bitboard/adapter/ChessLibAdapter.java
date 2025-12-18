@@ -1,10 +1,12 @@
 package ch.adjudicator.agent.bitboard.adapter;
 
 import ch.adjudicator.agent.bitboard.model.BoardState;
+import ch.adjudicator.agent.bitboard.model.FastMove;
 import com.github.bhlangonijr.chesslib.Board;
 import com.github.bhlangonijr.chesslib.Piece;
 import com.github.bhlangonijr.chesslib.Side;
 import com.github.bhlangonijr.chesslib.Square;
+import com.github.bhlangonijr.chesslib.move.Move;
 
 /**
  * Adapter to convert between ChessLib representations and bitboard representations.
@@ -208,5 +210,10 @@ public class ChessLibAdapter {
         if ((state.blackPieces[BoardState.INDEX_KING] & squareBit) != 0) return 'k';
         
         return '.';
+    }
+
+    public static Move convertFastMoveToChessLibMove(FastMove fastMove) {
+        //TODO implement
+        return null;
     }
 }
