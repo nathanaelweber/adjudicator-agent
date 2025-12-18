@@ -64,3 +64,8 @@ Implementing a bitboard engine in Java requires using `long` primitives, as Java
 ### Phase 6: Performance & Testing
 * [x] **Perft Testing**: Implement a **Perft** (Performance Test) function. This recursively counts moves to a specific depth and compares them against known values (like the "Starting Position" or "KiwiPete" position).
 * [x] **Inlining**: Ensure your bit manipulation methods are `final` or `static` to encourage the JVM's Just-In-Time (JIT) compiler to inline them.
+
+### Phase 7: Conversion adapter
+* [x] **Adapter for chesslib** Create an adapter which converts a fen into a BoardState. The bit representation shall match the position and representation of ch.adjudicator.agent.bitboard.generator.
+* [x] **Move adapter** Create an adapter for move operations form chesslib to a bitboard representation of the same move, and vice-versa.
+* [x] **Test for adapter** Create tests for the two adapters.
