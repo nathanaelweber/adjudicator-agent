@@ -50,7 +50,7 @@ class ApplyMoveTest {
         BoardState state = ChessLibAdapter.fenToBoardState(fen);
         
         FastMove move = new FastMove();
-        move.originSquare = 18; // c4
+        move.originSquare = 26; // c4
         move.destinationSquare = 53; // f7
         move.promotion = false;
         move.enPassant = false;
@@ -59,7 +59,7 @@ class ApplyMoveTest {
         BoardState newState = state.applyMove(move);
         
         // Check bishop moved
-        assertEquals(0, newState.whitePieces[BoardState.INDEX_BISHOP] & (1L << 18));
+        assertEquals(0, newState.whitePieces[BoardState.INDEX_BISHOP] & (1L << 26));
         assertNotEquals(0, newState.whitePieces[BoardState.INDEX_BISHOP] & (1L << 53));
         
         // Check black pawn removed

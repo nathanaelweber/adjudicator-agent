@@ -6,14 +6,16 @@ import ch.adjudicator.agent.bitboard.model.FastMove;
 import com.github.bhlangonijr.chesslib.Board;
 import com.github.bhlangonijr.chesslib.move.Move;
 import org.junit.jupiter.api.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.Random;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class RandomBitboardMoveGeneratorTest {
+    private static final Logger LOGGER = LoggerFactory.getLogger(RandomBitboardMoveGeneratorTest.class);
+
     @Test
     void testDo15_randomMoves_shouldAlwaysRespondWithTheSamePossibleMovesAsInChesslib() {
         String startFen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
@@ -21,7 +23,9 @@ public class RandomBitboardMoveGeneratorTest {
 
         FastMove lastMove = null;
 
-        for (int i = 0; i < 15; i++) {
+        for (int i = 0; i < 25; i++) {
+            String fen = ChessLibAdapter.boardStateToFen(state);
+            LOGGER.info("Current fen={}", fen);
             List<FastMove> fastMoves = BitboardMoveGenerator.generateMoves(state, lastMove);
             Board board = new Board();
             board.loadFromFen(ChessLibAdapter.boardStateToFen(state));

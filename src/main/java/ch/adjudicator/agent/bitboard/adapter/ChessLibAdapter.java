@@ -212,8 +212,29 @@ public class ChessLibAdapter {
         return '.';
     }
 
+    /**
+     * Converts a FastMove to a ChessLib Move object.
+     * 
+     * @param fastMove FastMove with origin, destination, and special flags
+     * @return ChessLib Move object
+     */
     public static Move convertFastMoveToChessLibMove(FastMove fastMove) {
-        //TODO implement
-        return null;
+        Square fromSquare = Square.values()[fastMove.originSquare];
+        Square toSquare = Square.values()[fastMove.destinationSquare];
+        
+        Piece promotion = Piece.NONE;
+        if (fastMove.promotion) {
+            // Map pieceTypeToPromote to ChessLib Piece
+            // Note: We use WHITE pieces here; ChessLib Move handles color internally
+            promotion = switch (fastMove.pieceTypeToPromote) {
+                case BoardState.INDEX_KNIGHT -> Piece.WHITE_KNIGHT;
+                case BoardState.INDEX_BISHOP -> Piece.WHITE_BISHOP;
+                case BoardState.INDEX_ROOK -> Piece.WHITE_ROOK;
+                case BoardState.INDEX_QUEEN -> Piece.WHITE_QUEEN;
+                default -> Piece.NONE;
+            };
+        }
+        
+        return new Move(fromSquare, toSquare, promotion);
     }
 }
