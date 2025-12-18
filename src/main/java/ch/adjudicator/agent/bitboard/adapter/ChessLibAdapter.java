@@ -62,23 +62,23 @@ public class ChessLibAdapter {
         }
         
         // Set side to move
-        state.whiteToMove = (board.getSideToMove() == Side.WHITE);
+        state.setWhiteToMove(board.getSideToMove() == Side.WHITE);
         
         // Set castling rights - parse from FEN string
         String fen = board.getFen();
         String[] fenParts = fen.split(" ");
         String castlingRights = fenParts.length > 2 ? fenParts[2] : "-";
-        state.whiteKingsideCastling = castlingRights.contains("K");
-        state.whiteQueensideCastling = castlingRights.contains("Q");
-        state.blackKingsideCastling = castlingRights.contains("k");
-        state.blackQueensideCastling = castlingRights.contains("q");
+        state.setWhiteKingsideCastling(castlingRights.contains("K"));
+        state.setWhiteQueensideCastling(castlingRights.contains("Q"));
+        state.setBlackKingsideCastling(castlingRights.contains("k"));
+        state.setBlackQueensideCastling(castlingRights.contains("q"));
         
         // Set en passant square
         Square epSquare = board.getEnPassant();
         if (epSquare != null && epSquare != Square.NONE) {
-            state.enPassantSquare = epSquare.ordinal();
+            state.setEnPassantSquare(epSquare.ordinal());
         } else {
-            state.enPassantSquare = -1;
+            state.setEnPassantSquare(-1);
         }
         
         return state;
@@ -149,16 +149,16 @@ public class ChessLibAdapter {
         
         // Active color
         fen.append(' ');
-        fen.append(state.whiteToMove ? 'w' : 'b');
+        fen.append(state.isWhiteToMove() ? 'w' : 'b');
         
         // Castling rights
         fen.append(' ');
         StringBuilder castling = new StringBuilder();
-        if (state.whiteKingsideCastling) castling.append('K');
-        if (state.whiteQueensideCastling) castling.append('Q');
-        if (state.blackKingsideCastling) castling.append('k');
-        if (state.blackQueensideCastling) castling.append('q');
-        if (castling.length() == 0) {
+        if (state.isWhiteKingsideCastling()) castling.append('K');
+        if (state.isWhiteQueensideCastling()) castling.append('Q');
+        if (state.isBlackKingsideCastling()) castling.append('k');
+        if (state.isBlackQueensideCastling()) castling.append('q');
+        if (castling.isEmpty()) {
             fen.append('-');
         } else {
             fen.append(castling);
@@ -166,10 +166,11 @@ public class ChessLibAdapter {
         
         // En passant square
         fen.append(' ');
-        if (state.enPassantSquare == -1) {
+        int epSquareIndex = state.getEnPassantSquare();
+        if (epSquareIndex == -1) {
             fen.append('-');
         } else {
-            Square epSquare = Square.values()[state.enPassantSquare];
+            Square epSquare = Square.values()[epSquareIndex];
             fen.append(epSquare.toString().toLowerCase());
         }
 
