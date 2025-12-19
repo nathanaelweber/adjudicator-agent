@@ -236,4 +236,27 @@ class BitboardMoveGeneratorTest {
         // Note: This is pseudo-legal move count (doesn't check for king safety)
         assertTrue(moves.size() > 0, "Should generate moves for complex position");
     }
+
+    @Test
+    void testCheckmateInOnePosition() {
+        String fen = "rn1qkbnr/ppp2ppp/3p4/4N3/2B1P1b1/8/PPPPQPPP/RNB1K2R w KQkq - 0 1";
+        BoardState state = ChessLibAdapter.fenToBoardState(fen);
+
+        List<FastMove> moves = BitboardMoveGenerator.generateMoves(state, null);
+
+        // expect exactly 39 possible moves
+        assertTrue(moves.size() == 39, "Should generate moves for complex position");
+    }
+
+    @Test
+    void testCheckmatePosition() {
+        String fen = "rn1qkbnr/ppp2Bpp/3p4/4N3/4P1b1/8/PPPPQPPP/RNB1K2R b KQkq - 0 1";
+        BoardState state = ChessLibAdapter.fenToBoardState(fen);
+
+        List<FastMove> moves = BitboardMoveGenerator.generateMoves(state, null);
+
+        // expect exactly 0 possible moves
+        assertTrue(moves.isEmpty(), "Should generate zero positions, since is in checkmate");
+        assertTrue(BitboardMoveGenerator.isCurrentPlayerInCheck(state), "Should be in check");
+    }
 }
