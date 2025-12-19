@@ -1,5 +1,6 @@
 package ch.adjudicator.agent;
 
+import ch.adjudicator.agent.bitboard.adapter.ChessLibAdapter;
 import ch.adjudicator.client.*;
 import com.github.bhlangonijr.chesslib.Board;
 import com.github.bhlangonijr.chesslib.move.Move;
@@ -80,7 +81,7 @@ public class SmartAgent implements Agent {
         // Apply the move to our board
         board.doMove(selectedMove);
         // Update the selected move to history, since we need this for draw calculation.
-        bestMoveCalculator.updatePositionHistory(board);
+        bestMoveCalculator.updatePositionHistory(ChessLibAdapter.fenToBoardState(board.getFen()));
 
         // Convert to Long Algebraic Notation (LAN)
         String moveStr = moveToLAN(selectedMove);

@@ -142,7 +142,7 @@ public class BitboardMoveGenerator {
     /**
      * Copies a board state.
      */
-    private static BoardState copyBoardState(BoardState state) {
+    public static BoardState copyBoardState(BoardState state) {
         BoardState copy = new BoardState();
         for (int i = 0; i < 6; i++) {
             copy.whitePieces[i] = state.whitePieces[i];
@@ -151,7 +151,14 @@ public class BitboardMoveGenerator {
         copy.bitAuxiliaries = state.bitAuxiliaries;
         return copy;
     }
-    
+
+    public static boolean isCurrentPlayerInCheck(BoardState boardState) {
+        if(boardState.isWhiteToMove()) {
+            return isKingInCheck(boardState, true);
+        }
+        return isKingInCheck(boardState, false);
+    }
+
     /**
      * Checks if the specified side's king is in check.
      */

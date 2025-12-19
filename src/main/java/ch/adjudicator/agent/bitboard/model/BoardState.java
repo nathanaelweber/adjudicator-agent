@@ -1,16 +1,18 @@
 package ch.adjudicator.agent.bitboard.model;
 
 public class BoardState {
+    public long[] whitePieces = new long[6];
+    public long[] blackPieces = new long[6];
+    // Additional FEN state
+    public long bitAuxiliaries;
+
     public static final int INDEX_PAWN = 0;
     public static final int INDEX_KNIGHT = 1;
     public static final int INDEX_BISHOP = 2;
     public static final int INDEX_ROOK = 3;
     public static final int INDEX_QUEEN = 4;
     public static final int INDEX_KING = 5;
-    public long[] whitePieces = new long[6];
-    public long[] blackPieces = new long[6];
-    
-    // Additional FEN state
+
     public static final int INDEX_WHITE_TO_MOVE = 15;
     public static final int INDEX_WHITE_KINGSIDE_CASTLING_RIGHT_INTACT = 14;
     public static final int INDEX_WHITE_QUEENSIDE_CASTLING_RIGHT_INTACT = 13;
@@ -19,8 +21,6 @@ public class BoardState {
     public static final int INDEX_EN_PASSANT_SQUARE_ACTIVE = 6;
     public static final long EN_PASSANT_SQUARE_MASK = 0x3FL; // using 6 bits thus the en passant square mask
     public static final long EN_PASSANT_CLEAR_MASK = 0x7F;
-
-    public long bitAuxiliaries;
 
     public BoardState applyMove(FastMove fastMove) {
         BoardState newState = new BoardState();
@@ -278,5 +278,17 @@ public class BoardState {
             bitAuxiliaries |= (square & EN_PASSANT_SQUARE_MASK);
             bitAuxiliaries |= (1L << INDEX_EN_PASSANT_SQUARE_ACTIVE);
         }
+    }
+
+    public boolean isEqualIgnoringAuxiliariesFlags(BoardState boardState) {
+        for(int i = 0; i < 6; i++) {
+            if(boardState.blackPieces[i] != blackPieces[i]) {
+                return false;
+            }
+            if(boardState.whitePieces[i] != whitePieces[i]) {
+                return false;
+            }
+        }
+        return true;
     }
 }

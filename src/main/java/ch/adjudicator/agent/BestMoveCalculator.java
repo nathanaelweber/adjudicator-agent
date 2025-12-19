@@ -1,5 +1,9 @@
 package ch.adjudicator.agent;
 
+import ch.adjudicator.agent.bitboard.adapter.ChessLibAdapter;
+import ch.adjudicator.agent.bitboard.generator.BitboardMoveGenerator;
+import ch.adjudicator.agent.bitboard.model.BoardState;
+import ch.adjudicator.agent.bitboard.model.FastMove;
 import ch.adjudicator.agent.positionevaluation.ResultingScoreAndBounds;
 import ch.adjudicator.agent.positionevaluation.ScoreAndMove;
 import ch.adjudicator.agent.positionevaluation.SimpleBoardEvaluation;
@@ -8,12 +12,7 @@ import ch.adjudicator.client.GameInfo;
 import com.github.bhlangonijr.chesslib.Board;
 import com.github.bhlangonijr.chesslib.Piece;
 import com.github.bhlangonijr.chesslib.Square;
-import com.github.bhlangonijr.chesslib.Side;
 import com.github.bhlangonijr.chesslib.move.Move;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -51,8 +50,8 @@ public class BestMoveCalculator {
     private TranspositionTableEntry[] transpositionTable;
 
     // Position history for repetition detection
-    private List<Long> positionHistory;
-    private List<Move> debugMoveHistory;
+    private List<BoardState> positionHistory;
+    private List<FastMove> debugMoveHistory;
     private boolean collectDebugMoves = false;
 
     // Zobrist hashing
@@ -234,8 +233,8 @@ public class BestMoveCalculator {
         }
     }
 
-    public void updatePositionHistory(Board board) {
-        positionHistory.add(zobristHash.computeHash(board));
+    public void updatePositionHistory(BoardState board) {
+        positionHistory.add(board);
     }
 
     /**
@@ -275,7 +274,7 @@ public class BestMoveCalculator {
      * and
      * https://www.chessprogramming.org/Alpha-Beta
      */
-    private ResultingScoreAndBounds alphaBeta(Board board, int depth, int alpha, int beta, final boolean isMaximizingPlayer, Consumer<ResultingScoreAndBounds> bestMoveSink, long endTime, Consumer<AtomicBoolean> abortingSink, int ply) {
+    private ResultingScoreAndBounds alphaBeta(BoardState board, FastMove lastMove, int depth, int alpha, int beta, final boolean isMaximizingPlayer, Consumer<ResultingScoreAndBounds> bestMoveSink, long endTime, Consumer<AtomicBoolean> abortingSink, int ply) {
         if (collectDebugMoves) {
             if (debugMoveHistory.size() > 0) {
                 if (debugMoveHistory.getFirst().toString().toUpperCase().equals("F1E1")) {
@@ -284,11 +283,8 @@ public class BestMoveCalculator {
             }
         }
 
-        // Compute position hash
-        long positionHash = zobristHash.computeHash(board);
-
         // Check for repetition (3-fold repetition is a draw)
-        if (isRepetition(positionHash)) {
+        if (isRepetition(board)) {
             return ResultingScoreAndBounds.builder()
                     .score(DRAW_SCORE)
                     .alpha(alpha)
@@ -297,26 +293,13 @@ public class BestMoveCalculator {
                     .build();
         }
 
-        /*
         // Transposition table lookup
-        int ttIndex = (int)(positionHash & TT_MASK);
-        TranspositionTableEntry ttEntry = transpositionTable[ttIndex];
-        
-        if (ttEntry.isValid(positionHash, depth)) {
-            Score ttScore = Score.fromInt(ttEntry.score);
-            if (ttEntry.nodeType == TT_EXACT) {
-                return ttScore;
-            } else if (ttEntry.nodeType == TT_ALPHA && ttScore.compareTo(alpha) <= 0) {
-                return alpha;
-            } else if (ttEntry.nodeType == TT_BETA && ttScore.compareTo(beta) >= 0) {
-                return beta;
-            }
-        }*/
+        // - currently not implemented -
 
         // Check if position is terminal (checkmate, stalemate)
-        List<Move> legalMoves = board.legalMoves();
+        List<FastMove> legalMoves = BitboardMoveGenerator.generateMoves(board, lastMove);
         if (legalMoves.isEmpty()) {
-            if (board.isKingAttacked()) {
+            if (BitboardMoveGenerator.isCurrentPlayerInCheck(board)) {
                 // Checkmate - we are getting mated at this position
                 // Return mate score with distance = ply from root
                 int movesToMate = (ply + 1) / 2;
@@ -339,8 +322,7 @@ public class BestMoveCalculator {
 
         // Base case: use quiescence search at leaf nodes
         if (depth <= 0) {
-            int score = SimpleBoardEvaluation.evaluate(board);
-            String boardFen = board.getFen();
+            int score = ch.adjudicator.agent.bitboard.evaluation.SimpleBoardEvaluation.evaluate(board);
             if(!isMaximizingPlayer) {
                 score = -score;
             }
@@ -362,24 +344,21 @@ public class BestMoveCalculator {
 
         if (isMaximizingPlayer) {
             int bestScore = -MATE_SCORE - 1000;
-            Move bestMove = null;
 
-            for (Move move : legalMoves) {
-                board.doMove(move);
+            for (FastMove nextMove : legalMoves) {
+                BoardState nextBoardState = board.applyMove(nextMove);
                 if (collectDebugMoves) {
-                    debugMoveHistory.add(move);
+                    debugMoveHistory.add(nextMove);
                 }
 
-                long newPositionHash = zobristHash.computeHash(board);
-                positionHistory.add(newPositionHash);
+                positionHistory.add(nextBoardState);
 
-                int score = alphaBeta(board, depth - 1, alpha, beta, false, bestMoveSink, endTime, abortingSink, ply + 1).getScore();
+                int score = alphaBeta(nextBoardState, nextMove, depth - 1, alpha, beta, false, bestMoveSink, endTime, abortingSink, ply + 1).getScore();
 
                 positionHistory.removeLast();
                 if (collectDebugMoves) {
                     debugMoveHistory.removeLast();
                 }
-                board.undoMove();
 
                 if (score > bestScore) {
                     bestScore = score;
@@ -432,25 +411,22 @@ public class BestMoveCalculator {
                     .build();
         } else {
             int bestScore = MATE_SCORE + 1000;
-            Move bestMove = null;
 
-            for (Move move : legalMoves) {
-                board.doMove(move);
+            for (FastMove nextMove : legalMoves) {
+                BoardState nextBoardState = board.applyMove(nextMove);
                 if (collectDebugMoves) {
-                    debugMoveHistory.add(move);
+                    debugMoveHistory.add(nextMove);
                 }
 
-                long newPositionHash = zobristHash.computeHash(board);
-                positionHistory.add(newPositionHash);
+                positionHistory.add(nextBoardState);
 
 
-                int score = alphaBeta(board, depth - 1, alpha, beta, true, bestMoveSink, endTime, abortingSink, ply + 1).getScore();
+                int score = alphaBeta(nextBoardState, nextMove, depth - 1, alpha, beta, true, bestMoveSink, endTime, abortingSink, ply + 1).getScore();
 
                 positionHistory.removeLast();
                 if (collectDebugMoves) {
                     debugMoveHistory.removeLast();
                 }
-                board.undoMove();
 
                 if (score < bestScore) {
                     bestScore = score;
@@ -489,10 +465,10 @@ public class BestMoveCalculator {
     /**
      * Check if current position is a repetition (2-fold or more in search tree)
      */
-    private boolean isRepetition(long positionHash) {
+    private boolean isRepetition(BoardState boardState) {
         int count = 0;
         for (int i = positionHistory.size() - 1; i >= 0; i--) {
-            if (positionHistory.get(i) == positionHash) {
+            if (positionHistory.get(i).isEqualIgnoringAuxiliariesFlags(boardState)) {
                 count++;
                 if (count >= 2) {
                     return true; // 3-fold repetition (current + 2 in history)
@@ -552,15 +528,12 @@ public class BestMoveCalculator {
             for (Move move : legalMoves) {
 
                 board.doMove(move);
-                if (collectDebugMoves) {
-                    debugMoveHistory.add(move);
-                }
 
-                long newPositionHash = zobristHash.computeHash(board);
-                positionHistory.add(newPositionHash);
+                BoardState boardState = ChessLibAdapter.fenToBoardState(board.getFen());
+                positionHistory.add(boardState);
 
                 scoreAndMoves.add(ScoreAndMove.builder()
-                        .score(alphaBeta(board, depth, alpha, beta, true, bestMoveSink, endTime, abortingSink, 0).negateScore())
+                        .score(alphaBeta(boardState, null, depth, alpha, beta, true, bestMoveSink, endTime, abortingSink, 0).negateScore())
                         .move(move)
                         .build());
 
