@@ -20,10 +20,13 @@ public class BitboardMoveGenerator {
     private static List<FastMove> filterPlayerInCheckMoves(BoardState boardState, List<FastMove> fastMoves, FastMove lastMove) {
         List<FastMove> legalMoves = new ArrayList<>();
         boolean isWhite = boardState.isWhiteToMove();
+
+        //TODO search for discovered attack from opponent by last move if last move was non-null otherwise just check for attacks, then after all search if a move puts my king in check
+        // This could be by moving a pinned of my pieces in line of the king or moving the king itself
         
         for (FastMove move : fastMoves) {
             // Make the move on a temporary board state
-            BoardState tempState = makeMove(boardState, move, isWhite);
+            BoardState tempState = makeMove(boardState, move, isWhite); // can be written better than this... this is garbage...
             
             // Check if the player's own king is in check after the move
             if (!isKingInCheck(tempState, isWhite)) {
