@@ -8,33 +8,11 @@ import java.util.List;
 
 public class BitboardMoveGenerator {
     public static List<FastMove> generateMoves(BoardState boardState, FastMove lastMove) {
-        List<FastMove> fastMoves;
         if(boardState.isWhiteToMove()) {
-            fastMoves = generateWhiteMoves(boardState);
+            return generateWhiteMoves(boardState, lastMove);
         } else {
-            fastMoves = generateBlackMoves(boardState);
+            return generateBlackMoves(boardState, lastMove);
         }
-        return filterPlayerInCheckMoves(boardState, fastMoves, lastMove);
-    }
-
-    private static List<FastMove> filterPlayerInCheckMoves(BoardState boardState, List<FastMove> fastMoves, FastMove lastMove) {
-        List<FastMove> legalMoves = new ArrayList<>();
-        boolean isWhite = boardState.isWhiteToMove();
-
-        //TODO search for discovered attack from opponent by last move if last move was non-null otherwise just check for attacks, then after all search if a move puts my king in check
-        // This could be by moving a pinned of my pieces in line of the king or moving the king itself
-        
-        for (FastMove move : fastMoves) {
-            // Make the move on a temporary board state
-            BoardState tempState = makeMove(boardState, move, isWhite); // can be written better than this... this is garbage...
-            
-            // Check if the player's own king is in check after the move
-            if (!isKingInCheck(tempState, isWhite)) {
-                legalMoves.add(move);
-            }
-        }
-        
-        return legalMoves;
     }
     
     /**
@@ -167,23 +145,36 @@ public class BitboardMoveGenerator {
      */
     private static boolean isKingInCheck(BoardState boardState, boolean whiteKing) {
         long kingBitboard = whiteKing ? boardState.whitePieces[BoardState.INDEX_KING] : boardState.blackPieces[BoardState.INDEX_KING];
-        
+
         if (kingBitboard == 0) {
             return false; // No king (shouldn't happen in valid position)
         }
-        
+
         int kingSquare = Long.numberOfTrailingZeros(kingBitboard);
-        
-        return whiteKing ? isSquareAttackedByBlack(kingSquare, boardState) : isSquareAttackedByWhite(kingSquare, boardState);
+        long bishopAttacks = BitboardGenerator.getBishopAttacks(kingSquare, kingSquare);
+        if(whiteKing) {
+            long blackAttackersForDiagonal = boardState.blackPieces[BoardState.INDEX_BISHOP] | boardState.blackPieces[BoardState.INDEX_QUEEN];
+            if(0 != (blackAttackersForDiagonal &= bishopAttacks)) {
+                //todo check for presence of blocking pieces in between before returning
+                return true;
+            }
+            long blackRookAttackersForStraight;
+        } else {
+            long whiteAttackersForDiagonal = boardState.whitePieces[BoardState.INDEX_BISHOP] | boardState.whitePieces[BoardState.INDEX_QUEEN];
+            if(0 != (whiteAttackersForDiagonal &= bishopAttacks)) {
+                return true;
+            }
+        }
+
+
+        return false;
     }
     
     /**
      * Checks if a square is attacked by white pieces.
      */
     private static boolean isSquareAttackedByWhite(int square, BoardState boardState) {
-        long whiteOccupied = getWhiteOccupied(boardState);
-        long blackOccupied = getBlackOccupied(boardState);
-        long allOccupied = whiteOccupied | blackOccupied;
+        long allOccupied = boardState.allOccupied;
         
         // Check for pawn attacks
         int rank = square / 8;
@@ -234,9 +225,7 @@ public class BitboardMoveGenerator {
      * Checks if a square is attacked by black pieces.
      */
     private static boolean isSquareAttackedByBlack(int square, BoardState boardState) {
-        long whiteOccupied = getWhiteOccupied(boardState);
-        long blackOccupied = getBlackOccupied(boardState);
-        long allOccupied = whiteOccupied | blackOccupied;
+        long allOccupied = boardState.allOccupied;
         
         // Check for pawn attacks
         int rank = square / 8;
@@ -283,7 +272,7 @@ public class BitboardMoveGenerator {
         return false;
     }
 
-    private static List<FastMove> generateWhiteMoves(BoardState boardState) {
+    private static List<FastMove> generateWhiteMoves(BoardState boardState, FastMove lastMove) {
         List<FastMove> moves = new ArrayList<>();
         
         // Calculate occupancy bitboards
@@ -297,12 +286,12 @@ public class BitboardMoveGenerator {
         generateWhiteBishopMoves(boardState, moves, whiteOccupied, blackOccupied, allOccupied);
         generateWhiteRookMoves(boardState, moves, whiteOccupied, blackOccupied, allOccupied);
         generateWhiteQueenMoves(boardState, moves, whiteOccupied, blackOccupied, allOccupied);
-        generateWhiteKingMoves(boardState, moves, whiteOccupied, blackOccupied);
+        generateWhiteKingMoves(boardState, moves, whiteOccupied, blackOccupied, lastMove);
         
         return moves;
     }
 
-    private static List<FastMove> generateBlackMoves(BoardState boardState) {
+    private static List<FastMove> generateBlackMoves(BoardState boardState, FastMove lastMove) {
         List<FastMove> moves = new ArrayList<>();
         
         // Calculate occupancy bitboards
@@ -316,19 +305,14 @@ public class BitboardMoveGenerator {
         generateBlackBishopMoves(boardState, moves, whiteOccupied, blackOccupied, allOccupied);
         generateBlackRookMoves(boardState, moves, whiteOccupied, blackOccupied, allOccupied);
         generateBlackQueenMoves(boardState, moves, whiteOccupied, blackOccupied, allOccupied);
-        generateBlackKingMoves(boardState, moves, whiteOccupied, blackOccupied);
+        generateBlackKingMoves(boardState, moves, whiteOccupied, blackOccupied, lastMove);
         
         return moves;
     }
 
     // Helper methods for occupancy
     private static long getWhiteOccupied(BoardState boardState) {
-        return boardState.whitePieces[BoardState.INDEX_PAWN] |
-               boardState.whitePieces[BoardState.INDEX_KNIGHT] |
-               boardState.whitePieces[BoardState.INDEX_BISHOP] |
-               boardState.whitePieces[BoardState.INDEX_ROOK] |
-               boardState.whitePieces[BoardState.INDEX_QUEEN] |
-               boardState.whitePieces[BoardState.INDEX_KING];
+        return boardState.whiteOccupied;
     }
 
     private static long getBlackOccupied(BoardState boardState) {
@@ -632,7 +616,7 @@ public class BitboardMoveGenerator {
 
     // King move generation
     private static void generateWhiteKingMoves(BoardState boardState, List<FastMove> moves,
-                                               long whiteOccupied, long blackOccupied) {
+                                               long whiteOccupied, long blackOccupied, FastMove lastMove) {
         long king = boardState.whitePieces[BoardState.INDEX_KING];
         
         if (king != 0) {
@@ -677,7 +661,7 @@ public class BitboardMoveGenerator {
     }
 
     private static void generateBlackKingMoves(BoardState boardState, List<FastMove> moves,
-                                               long whiteOccupied, long blackOccupied) {
+                                               long whiteOccupied, long blackOccupied, FastMove lastMove) {
         long king = boardState.blackPieces[BoardState.INDEX_KING];
         
         if (king != 0) {

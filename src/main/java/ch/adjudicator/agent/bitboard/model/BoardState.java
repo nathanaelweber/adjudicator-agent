@@ -6,6 +6,22 @@ public class BoardState {
     // Additional FEN state
     public long bitAuxiliaries;
 
+    public long allOccupied;
+    public long whiteOccupied;
+    public long blackOccupied;
+
+    public void updateOccupiedFlags() {
+        whiteOccupied = 0;
+        for(int i = 0; i < 6; i++) {
+            whiteOccupied |= whitePieces[i];
+        }
+        blackOccupied = 0;
+        for(int i = 0; i < 6; i++) {
+            blackOccupied |= blackPieces[i];
+        }
+        allOccupied = whiteOccupied | blackOccupied;
+    }
+
     public static final int INDEX_PAWN = 0;
     public static final int INDEX_KNIGHT = 1;
     public static final int INDEX_BISHOP = 2;
