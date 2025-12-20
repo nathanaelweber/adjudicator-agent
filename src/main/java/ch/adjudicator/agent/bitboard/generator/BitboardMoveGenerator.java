@@ -130,6 +130,9 @@ public class BitboardMoveGenerator {
             copy.blackPieces[i] = state.blackPieces[i];
         }
         copy.bitAuxiliaries = state.bitAuxiliaries;
+        copy.whiteOccupied = state.whiteOccupied;
+        copy.blackOccupied = state.blackOccupied;
+        copy.allOccupied = state.allOccupied;
         return copy;
     }
 
@@ -275,18 +278,13 @@ public class BitboardMoveGenerator {
     private static List<FastMove> generateWhiteMoves(BoardState boardState, FastMove lastMove) {
         List<FastMove> moves = new ArrayList<>();
         
-        // Calculate occupancy bitboards
-        long whiteOccupied = getWhiteOccupied(boardState);
-        long blackOccupied = getBlackOccupied(boardState);
-        long allOccupied = whiteOccupied | blackOccupied;
-        
         // Generate moves for each piece type
-        generateWhitePawnMoves(boardState, moves, whiteOccupied, blackOccupied, allOccupied);
-        generateWhiteKnightMoves(boardState, moves, whiteOccupied, blackOccupied);
-        generateWhiteBishopMoves(boardState, moves, whiteOccupied, blackOccupied, allOccupied);
-        generateWhiteRookMoves(boardState, moves, whiteOccupied, blackOccupied, allOccupied);
-        generateWhiteQueenMoves(boardState, moves, whiteOccupied, blackOccupied, allOccupied);
-        generateWhiteKingMoves(boardState, moves, whiteOccupied, blackOccupied, lastMove);
+        generateWhitePawnMoves(boardState, moves);
+        generateWhiteKnightMoves(boardState, moves);
+        generateWhiteBishopMoves(boardState, moves);
+        generateWhiteRookMoves(boardState, moves);
+        generateWhiteQueenMoves(boardState, moves);
+        generateWhiteKingMoves(boardState, moves, lastMove);
         
         return moves;
     }
@@ -294,18 +292,13 @@ public class BitboardMoveGenerator {
     private static List<FastMove> generateBlackMoves(BoardState boardState, FastMove lastMove) {
         List<FastMove> moves = new ArrayList<>();
         
-        // Calculate occupancy bitboards
-        long whiteOccupied = getWhiteOccupied(boardState);
-        long blackOccupied = getBlackOccupied(boardState);
-        long allOccupied = whiteOccupied | blackOccupied;
-        
         // Generate moves for each piece type
-        generateBlackPawnMoves(boardState, moves, whiteOccupied, blackOccupied, allOccupied);
-        generateBlackKnightMoves(boardState, moves, whiteOccupied, blackOccupied);
-        generateBlackBishopMoves(boardState, moves, whiteOccupied, blackOccupied, allOccupied);
-        generateBlackRookMoves(boardState, moves, whiteOccupied, blackOccupied, allOccupied);
-        generateBlackQueenMoves(boardState, moves, whiteOccupied, blackOccupied, allOccupied);
-        generateBlackKingMoves(boardState, moves, whiteOccupied, blackOccupied, lastMove);
+        generateBlackPawnMoves(boardState, moves);
+        generateBlackKnightMoves(boardState, moves);
+        generateBlackBishopMoves(boardState, moves);
+        generateBlackRookMoves(boardState, moves);
+        generateBlackQueenMoves(boardState, moves);
+        generateBlackKingMoves(boardState, moves, lastMove);
         
         return moves;
     }
@@ -316,17 +309,11 @@ public class BitboardMoveGenerator {
     }
 
     private static long getBlackOccupied(BoardState boardState) {
-        return boardState.blackPieces[BoardState.INDEX_PAWN] |
-               boardState.blackPieces[BoardState.INDEX_KNIGHT] |
-               boardState.blackPieces[BoardState.INDEX_BISHOP] |
-               boardState.blackPieces[BoardState.INDEX_ROOK] |
-               boardState.blackPieces[BoardState.INDEX_QUEEN] |
-               boardState.blackPieces[BoardState.INDEX_KING];
+        return boardState.blackOccupied;
     }
 
     // White pawn move generation
-    private static void generateWhitePawnMoves(BoardState boardState, List<FastMove> moves, 
-                                               long whiteOccupied, long blackOccupied, long allOccupied) {
+    private static void generateWhitePawnMoves(BoardState boardState, List<FastMove> moves) {
         long pawns = boardState.whitePieces[BoardState.INDEX_PAWN];
         
         while (pawns != 0) {
@@ -339,7 +326,7 @@ public class BitboardMoveGenerator {
             
             // Single push
             int singlePush = from + 8;
-            if (singlePush < 64 && (allOccupied & (1L << singlePush)) == 0) {
+            if (singlePush < 64 && (boardState.allOccupied & (1L << singlePush)) == 0) {
                 if (rank == 6) { // Promotion rank
                     addPromotionMoves(moves, from, singlePush);
                 } else {
@@ -349,7 +336,7 @@ public class BitboardMoveGenerator {
                 // Double push from starting rank
                 if (rank == 1) {
                     int doublePush = from + 16;
-                    if ((allOccupied & (1L << doublePush)) == 0) {
+                    if ((boardState.allOccupied & (1L << doublePush)) == 0) {
                         addMove(moves, from, doublePush, false, false, false);
                     }
                 }
@@ -359,7 +346,7 @@ public class BitboardMoveGenerator {
             // Left capture
             if (file > 0) {
                 int leftCapture = from + 7;
-                if (leftCapture < 64 && (blackOccupied & (1L << leftCapture)) != 0) {
+                if (leftCapture < 64 && (boardState.blackOccupied & (1L << leftCapture)) != 0) {
                     if (rank == 6) {
                         addPromotionMoves(moves, from, leftCapture);
                     } else {
@@ -371,7 +358,7 @@ public class BitboardMoveGenerator {
             // Right capture
             if (file < 7) {
                 int rightCapture = from + 9;
-                if (rightCapture < 64 && (blackOccupied & (1L << rightCapture)) != 0) {
+                if (rightCapture < 64 && (boardState.blackOccupied & (1L << rightCapture)) != 0) {
                     if (rank == 6) {
                         addPromotionMoves(moves, from, rightCapture);
                     } else {
@@ -392,8 +379,7 @@ public class BitboardMoveGenerator {
     }
 
     // Black pawn move generation
-    private static void generateBlackPawnMoves(BoardState boardState, List<FastMove> moves,
-                                               long whiteOccupied, long blackOccupied, long allOccupied) {
+    private static void generateBlackPawnMoves(BoardState boardState, List<FastMove> moves) {
         long pawns = boardState.blackPieces[BoardState.INDEX_PAWN];
         
         while (pawns != 0) {
@@ -406,7 +392,7 @@ public class BitboardMoveGenerator {
             
             // Single push (down)
             int singlePush = from - 8;
-            if (singlePush >= 0 && (allOccupied & (1L << singlePush)) == 0) {
+            if (singlePush >= 0 && (boardState.allOccupied & (1L << singlePush)) == 0) {
                 if (rank == 1) { // Promotion rank
                     addPromotionMoves(moves, from, singlePush);
                 } else {
@@ -416,7 +402,7 @@ public class BitboardMoveGenerator {
                 // Double push from starting rank
                 if (rank == 6) {
                     int doublePush = from - 16;
-                    if ((allOccupied & (1L << doublePush)) == 0) {
+                    if ((boardState.allOccupied & (1L << doublePush)) == 0) {
                         addMove(moves, from, doublePush, false, false, false);
                     }
                 }
@@ -426,7 +412,7 @@ public class BitboardMoveGenerator {
             // Left capture (from black's perspective)
             if (file > 0) {
                 int leftCapture = from - 9;
-                if (leftCapture >= 0 && (whiteOccupied & (1L << leftCapture)) != 0) {
+                if (leftCapture >= 0 && (boardState.whiteOccupied & (1L << leftCapture)) != 0) {
                     if (rank == 1) {
                         addPromotionMoves(moves, from, leftCapture);
                     } else {
@@ -438,7 +424,7 @@ public class BitboardMoveGenerator {
             // Right capture
             if (file < 7) {
                 int rightCapture = from - 7;
-                if (rightCapture >= 0 && (whiteOccupied & (1L << rightCapture)) != 0) {
+                if (rightCapture >= 0 && (boardState.whiteOccupied & (1L << rightCapture)) != 0) {
                     if (rank == 1) {
                         addPromotionMoves(moves, from, rightCapture);
                     } else {
@@ -459,8 +445,7 @@ public class BitboardMoveGenerator {
     }
 
     // Knight move generation
-    private static void generateWhiteKnightMoves(BoardState boardState, List<FastMove> moves,
-                                                 long whiteOccupied, long blackOccupied) {
+    private static void generateWhiteKnightMoves(BoardState boardState, List<FastMove> moves) {
         long knights = boardState.whitePieces[BoardState.INDEX_KNIGHT];
         
         while (knights != 0) {
@@ -468,7 +453,7 @@ public class BitboardMoveGenerator {
             knights &= knights - 1;
             
             long attacks = BitboardGenerator.KNIGHT_ATTACKS[from];
-            attacks &= ~whiteOccupied; // Remove friendly pieces
+            attacks &= ~boardState.whiteOccupied; // Remove friendly pieces
             
             while (attacks != 0) {
                 int to = Long.numberOfTrailingZeros(attacks);
@@ -478,8 +463,7 @@ public class BitboardMoveGenerator {
         }
     }
 
-    private static void generateBlackKnightMoves(BoardState boardState, List<FastMove> moves,
-                                                 long whiteOccupied, long blackOccupied) {
+    private static void generateBlackKnightMoves(BoardState boardState, List<FastMove> moves) {
         long knights = boardState.blackPieces[BoardState.INDEX_KNIGHT];
         
         while (knights != 0) {
@@ -487,7 +471,7 @@ public class BitboardMoveGenerator {
             knights &= knights - 1;
             
             long attacks = BitboardGenerator.KNIGHT_ATTACKS[from];
-            attacks &= ~blackOccupied; // Remove friendly pieces
+            attacks &= ~boardState.blackOccupied; // Remove friendly pieces
             
             while (attacks != 0) {
                 int to = Long.numberOfTrailingZeros(attacks);
@@ -498,16 +482,15 @@ public class BitboardMoveGenerator {
     }
 
     // Bishop move generation
-    private static void generateWhiteBishopMoves(BoardState boardState, List<FastMove> moves,
-                                                 long whiteOccupied, long blackOccupied, long allOccupied) {
+    private static void generateWhiteBishopMoves(BoardState boardState, List<FastMove> moves) {
         long bishops = boardState.whitePieces[BoardState.INDEX_BISHOP];
         
         while (bishops != 0) {
             int from = Long.numberOfTrailingZeros(bishops);
             bishops &= bishops - 1;
             
-            long attacks = BitboardGenerator.getBishopAttacks(from, allOccupied);
-            attacks &= ~whiteOccupied;
+            long attacks = BitboardGenerator.getBishopAttacks(from, boardState.allOccupied);
+            attacks &= ~boardState.whiteOccupied;
             
             while (attacks != 0) {
                 int to = Long.numberOfTrailingZeros(attacks);
@@ -517,16 +500,15 @@ public class BitboardMoveGenerator {
         }
     }
 
-    private static void generateBlackBishopMoves(BoardState boardState, List<FastMove> moves,
-                                                 long whiteOccupied, long blackOccupied, long allOccupied) {
+    private static void generateBlackBishopMoves(BoardState boardState, List<FastMove> moves) {
         long bishops = boardState.blackPieces[BoardState.INDEX_BISHOP];
         
         while (bishops != 0) {
             int from = Long.numberOfTrailingZeros(bishops);
             bishops &= bishops - 1;
             
-            long attacks = BitboardGenerator.getBishopAttacks(from, allOccupied);
-            attacks &= ~blackOccupied;
+            long attacks = BitboardGenerator.getBishopAttacks(from, boardState.allOccupied);
+            attacks &= ~boardState.blackOccupied;
             
             while (attacks != 0) {
                 int to = Long.numberOfTrailingZeros(attacks);
@@ -537,16 +519,15 @@ public class BitboardMoveGenerator {
     }
 
     // Rook move generation
-    private static void generateWhiteRookMoves(BoardState boardState, List<FastMove> moves,
-                                               long whiteOccupied, long blackOccupied, long allOccupied) {
+    private static void generateWhiteRookMoves(BoardState boardState, List<FastMove> moves) {
         long rooks = boardState.whitePieces[BoardState.INDEX_ROOK];
         
         while (rooks != 0) {
             int from = Long.numberOfTrailingZeros(rooks);
             rooks &= rooks - 1;
             
-            long attacks = BitboardGenerator.getRookAttacks(from, allOccupied);
-            attacks &= ~whiteOccupied;
+            long attacks = BitboardGenerator.getRookAttacks(from, boardState.allOccupied);
+            attacks &= ~boardState.whiteOccupied;
             
             while (attacks != 0) {
                 int to = Long.numberOfTrailingZeros(attacks);
@@ -556,16 +537,15 @@ public class BitboardMoveGenerator {
         }
     }
 
-    private static void generateBlackRookMoves(BoardState boardState, List<FastMove> moves,
-                                               long whiteOccupied, long blackOccupied, long allOccupied) {
+    private static void generateBlackRookMoves(BoardState boardState, List<FastMove> moves) {
         long rooks = boardState.blackPieces[BoardState.INDEX_ROOK];
         
         while (rooks != 0) {
             int from = Long.numberOfTrailingZeros(rooks);
             rooks &= rooks - 1;
             
-            long attacks = BitboardGenerator.getRookAttacks(from, allOccupied);
-            attacks &= ~blackOccupied;
+            long attacks = BitboardGenerator.getRookAttacks(from, boardState.allOccupied);
+            attacks &= ~boardState.blackOccupied;
             
             while (attacks != 0) {
                 int to = Long.numberOfTrailingZeros(attacks);
@@ -576,16 +556,15 @@ public class BitboardMoveGenerator {
     }
 
     // Queen move generation
-    private static void generateWhiteQueenMoves(BoardState boardState, List<FastMove> moves,
-                                                long whiteOccupied, long blackOccupied, long allOccupied) {
+    private static void generateWhiteQueenMoves(BoardState boardState, List<FastMove> moves) {
         long queens = boardState.whitePieces[BoardState.INDEX_QUEEN];
         
         while (queens != 0) {
             int from = Long.numberOfTrailingZeros(queens);
             queens &= queens - 1;
             
-            long attacks = BitboardGenerator.getBishopAttacks(from, allOccupied) | BitboardGenerator.getRookAttacks(from, allOccupied);
-            attacks &= ~whiteOccupied;
+            long attacks = BitboardGenerator.getBishopAttacks(from, boardState.allOccupied) | BitboardGenerator.getRookAttacks(from, boardState.allOccupied);
+            attacks &= ~boardState.whiteOccupied;
             
             while (attacks != 0) {
                 int to = Long.numberOfTrailingZeros(attacks);
@@ -595,16 +574,15 @@ public class BitboardMoveGenerator {
         }
     }
 
-    private static void generateBlackQueenMoves(BoardState boardState, List<FastMove> moves,
-                                                long whiteOccupied, long blackOccupied, long allOccupied) {
+    private static void generateBlackQueenMoves(BoardState boardState, List<FastMove> moves) {
         long queens = boardState.blackPieces[BoardState.INDEX_QUEEN];
         
         while (queens != 0) {
             int from = Long.numberOfTrailingZeros(queens);
             queens &= queens - 1;
             
-            long attacks = BitboardGenerator.getBishopAttacks(from, allOccupied) | BitboardGenerator.getRookAttacks(from, allOccupied);
-            attacks &= ~blackOccupied;
+            long attacks = BitboardGenerator.getBishopAttacks(from, boardState.allOccupied) | BitboardGenerator.getRookAttacks(from, boardState.allOccupied);
+            attacks &= ~boardState.blackOccupied;
             
             while (attacks != 0) {
                 int to = Long.numberOfTrailingZeros(attacks);
@@ -615,15 +593,14 @@ public class BitboardMoveGenerator {
     }
 
     // King move generation
-    private static void generateWhiteKingMoves(BoardState boardState, List<FastMove> moves,
-                                               long whiteOccupied, long blackOccupied, FastMove lastMove) {
+    private static void generateWhiteKingMoves(BoardState boardState, List<FastMove> moves, FastMove lastMove) {
         long king = boardState.whitePieces[BoardState.INDEX_KING];
         
         if (king != 0) {
             int from = Long.numberOfTrailingZeros(king);
             
             long attacks = BitboardGenerator.KING_ATTACKS[from];
-            attacks &= ~whiteOccupied;
+            attacks &= ~boardState.whiteOccupied;
             
             while (attacks != 0) {
                 int to = Long.numberOfTrailingZeros(attacks);
@@ -632,11 +609,9 @@ public class BitboardMoveGenerator {
             }
             
             // Castling
-            long allOccupied = whiteOccupied | blackOccupied;
-            
             // Kingside castling
             if (boardState.isWhiteKingsideCastling() && from == 4) {
-                if ((allOccupied & 0x60L) == 0) { // f1 and g1 empty
+                if ((boardState.allOccupied & 0x60L) == 0) { // f1 and g1 empty
                     // Check that king is not in check and doesn't pass through check
                     if (!isSquareAttackedByBlack(4, boardState) && 
                         !isSquareAttackedByBlack(5, boardState) && 
@@ -648,7 +623,7 @@ public class BitboardMoveGenerator {
             
             // Queenside castling
             if (boardState.isWhiteQueensideCastling() && from == 4) {
-                if ((allOccupied & 0x0EL) == 0) { // b1, c1, d1 empty
+                if ((boardState.allOccupied & 0x0EL) == 0) { // b1, c1, d1 empty
                     // Check that king is not in check and doesn't pass through check
                     if (!isSquareAttackedByBlack(4, boardState) && 
                         !isSquareAttackedByBlack(3, boardState) && 
@@ -660,15 +635,14 @@ public class BitboardMoveGenerator {
         }
     }
 
-    private static void generateBlackKingMoves(BoardState boardState, List<FastMove> moves,
-                                               long whiteOccupied, long blackOccupied, FastMove lastMove) {
+    private static void generateBlackKingMoves(BoardState boardState, List<FastMove> moves, FastMove lastMove) {
         long king = boardState.blackPieces[BoardState.INDEX_KING];
         
         if (king != 0) {
             int from = Long.numberOfTrailingZeros(king);
             
             long attacks = BitboardGenerator.KING_ATTACKS[from];
-            attacks &= ~blackOccupied;
+            attacks &= ~boardState.blackOccupied;
             
             while (attacks != 0) {
                 int to = Long.numberOfTrailingZeros(attacks);
@@ -677,11 +651,9 @@ public class BitboardMoveGenerator {
             }
             
             // Castling
-            long allOccupied = whiteOccupied | blackOccupied;
-            
             // Kingside castling
             if (boardState.isBlackKingsideCastling() && from == 60) {
-                if ((allOccupied & 0x6000000000000000L) == 0) { // f8 and g8 empty
+                if ((boardState.allOccupied & 0x6000000000000000L) == 0) { // f8 and g8 empty
                     // Check that king is not in check and doesn't pass through check
                     if (!isSquareAttackedByWhite(60, boardState) && 
                         !isSquareAttackedByWhite(61, boardState) && 
@@ -693,7 +665,7 @@ public class BitboardMoveGenerator {
             
             // Queenside castling
             if (boardState.isBlackQueensideCastling() && from == 60) {
-                if ((allOccupied & 0x0E00000000000000L) == 0) { // b8, c8, d8 empty
+                if ((boardState.allOccupied & 0x0E00000000000000L) == 0) { // b8, c8, d8 empty
                     // Check that king is not in check and doesn't pass through check
                     if (!isSquareAttackedByWhite(60, boardState) && 
                         !isSquareAttackedByWhite(59, boardState) && 

@@ -209,6 +209,9 @@ public class BoardState {
         // Toggle side to move
         newState.setWhiteToMove(!isWhite);
         
+        // Update occupied bitboards
+        newState.updateOccupiedFlags();
+        
         return newState;
     }
 

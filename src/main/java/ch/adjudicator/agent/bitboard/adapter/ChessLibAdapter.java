@@ -83,6 +83,9 @@ public class ChessLibAdapter {
             state.setEnPassantSquare(-1);
         }
         
+        // Update occupied bitboards
+        state.updateOccupiedFlags();
+        
         return state;
     }
 
