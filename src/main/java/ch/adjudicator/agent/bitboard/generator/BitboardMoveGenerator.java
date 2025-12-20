@@ -2,6 +2,8 @@ package ch.adjudicator.agent.bitboard.generator;
 
 import ch.adjudicator.agent.bitboard.model.BoardState;
 import ch.adjudicator.agent.bitboard.model.FastMove;
+import com.github.bhlangonijr.chesslib.Bitboard;
+import com.github.bhlangonijr.chesslib.Board;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -146,8 +148,8 @@ public class BitboardMoveGenerator {
     /**
      * Checks if the specified side's king is in check.
      */
-    private static boolean isKingInCheck(BoardState boardState, boolean whiteKing) {
-        long kingBitboard = whiteKing ? boardState.whitePieces[BoardState.INDEX_KING] : boardState.blackPieces[BoardState.INDEX_KING];
+    public static boolean isKingInCheck(BoardState boardState, boolean isKingOfFocusWhite) {
+        long kingBitboard = isKingOfFocusWhite ? boardState.whitePieces[BoardState.INDEX_KING] : boardState.blackPieces[BoardState.INDEX_KING];
 
         if (kingBitboard == 0) {
             return false; // No king (shouldn't happen in valid position)
@@ -155,30 +157,146 @@ public class BitboardMoveGenerator {
 
         int kingSquare = Long.numberOfTrailingZeros(kingBitboard);
         long bishopAttacks = BitboardGenerator.getBishopAttacks(kingSquare, kingSquare);
-        if(whiteKing) {
-            long blackAttackersForDiagonal = boardState.blackPieces[BoardState.INDEX_BISHOP] | boardState.blackPieces[BoardState.INDEX_QUEEN];
-            if(0 != (blackAttackersForDiagonal &= bishopAttacks)) {
-                //todo check for presence of blocking pieces in between before returning
+        if(isKingOfFocusWhite) {
+            long potentialDiagonalAttackers = boardState.blackPieces[BoardState.INDEX_BISHOP] | boardState.blackPieces[BoardState.INDEX_QUEEN];
+            if(0 != (potentialDiagonalAttackers & bishopAttacks)) {
+                if(hasDiagonalAttackersUnblocked(potentialDiagonalAttackers, boardState.allOccupied, kingSquare)) {
+                    return true;
+                }
+            }
+            long potentialStraightAttackers = boardState.blackPieces[BoardState.INDEX_ROOK] | boardState.blackPieces[BoardState.INDEX_QUEEN];
+            if(0 != (potentialStraightAttackers & bishopAttacks)) {
+                if(hasStraightLineAttackersUnblocked(potentialStraightAttackers, boardState.allOccupied, kingSquare)) {
+                    return true;
+                }
+            }
+            if(0 != (BitboardGenerator.KNIGHT_ATTACKS[kingSquare] & boardState.blackPieces[BoardState.INDEX_KNIGHT])) {
                 return true;
             }
-            long blackRookAttackersForStraight;
         } else {
-            long whiteAttackersForDiagonal = boardState.whitePieces[BoardState.INDEX_BISHOP] | boardState.whitePieces[BoardState.INDEX_QUEEN];
-            if(0 != (whiteAttackersForDiagonal &= bishopAttacks)) {
+            long potentialDiagonalAttackers = boardState.whitePieces[BoardState.INDEX_BISHOP] | boardState.whitePieces[BoardState.INDEX_QUEEN];
+            if(0 != (potentialDiagonalAttackers & bishopAttacks)) {
+                if(hasDiagonalAttackersUnblocked(potentialDiagonalAttackers, boardState.allOccupied, kingSquare)) {
+                    return true;
+                }
+            }
+            long potentialStraightAttackers = boardState.whitePieces[BoardState.INDEX_ROOK] | boardState.whitePieces[BoardState.INDEX_QUEEN];
+            if(0 != (potentialStraightAttackers & bishopAttacks)) {
+                if(hasStraightLineAttackersUnblocked(potentialStraightAttackers, boardState.allOccupied, kingSquare)) {
+                    return true;
+                }
+            }
+            if(0 != (BitboardGenerator.KNIGHT_ATTACKS[kingSquare] & boardState.whitePieces[BoardState.INDEX_KNIGHT])) {
                 return true;
             }
         }
-
-
         return false;
     }
-    
+
+    private static boolean hasStraightLineAttackersUnblocked(long enemyRooksAndQueens, long allOccupied, int kingSquare) {
+        int rank = kingSquare / 8;
+        int file = kingSquare % 8;
+        for(int i = 0; i < 7; i++) {
+            if((rank+i) < 7) {
+                int potentialAttackerSquare = (rank+i+1)*8+file;
+                if((enemyRooksAndQueens & (1L << potentialAttackerSquare)) != 0) {
+                    return true;
+                }
+                if((allOccupied & (1L << potentialAttackerSquare)) != 0) {
+                    break; // in this direction a piece that can't attack is found, then we are done for the direction
+                }
+            }
+        }
+        for(int i = 0; i < 7; i++) {
+            if((rank-i) > 0) {
+                int potentialAttackerSquare = (rank-i-1)*8+file;
+                if((enemyRooksAndQueens & (1L << potentialAttackerSquare)) != 0) {
+                    return true;
+                }
+                if((allOccupied & (1L << potentialAttackerSquare)) != 0) {
+                    break; // in this direction a piece that can't attack is found, then we are done for the direction
+                }
+            }
+        }
+        for(int i = 0; i < 7; i++) {
+            if((file+i) < 7) {
+                int potentialAttackerSquare = rank*8+file+i+1;
+                if((enemyRooksAndQueens & (1L << potentialAttackerSquare)) != 0) {
+                    return true;
+                }
+                if((allOccupied & (1L << potentialAttackerSquare)) != 0) {
+                    break; // in this direction a piece that can't attack is found, then we are done for the direction
+                }
+            }
+        }
+        for(int i = 0; i < 7; i++) {
+            if((file-i) > 0) {
+                int potentialAttackerSquare = rank*8+file-i-1;
+                if((enemyRooksAndQueens & (1L << potentialAttackerSquare)) != 0) {
+                    return true;
+                }
+                if((allOccupied & (1L << potentialAttackerSquare)) != 0) {
+                    break; // in this direction a piece that can't attack is found, then we are done for the direction
+                }
+            }
+        }
+        return false;
+    }
+
+    private static boolean hasDiagonalAttackersUnblocked(long enemyBishopsAndQueens, long allOccupied, int kingSquare) {
+        int rank = kingSquare / 8;
+        int file = kingSquare % 8;
+        for(int i = 0; i < 7; i++) {
+            if((rank+i) < 7 && (file+i) < 7) {
+                int potentialAttackerSquare = (rank+i+1)*8+file+i+1;
+                if((enemyBishopsAndQueens & (1L << potentialAttackerSquare)) != 0) {
+                    return true;
+                }
+                if((allOccupied & (1L << potentialAttackerSquare)) != 0) {
+                    break; // in this direction a piece that can't attack is found, then we are done for the direction
+                }
+            }
+        }
+        for(int i = 0; i < 7; i++) {
+            if((rank-i) > 0 && (file-i) > 0) {
+                int potentialAttackerSquare = (rank-i-1)*8+file-i-1;
+                if((enemyBishopsAndQueens & (1L << potentialAttackerSquare)) != 0) {
+                    return true;
+                }
+                if((allOccupied & (1L << potentialAttackerSquare)) != 0) {
+                    break; // in this direction a piece that can't attack is found, then we are done for the direction
+                }
+            }
+        }
+        for(int i = 0; i < 7; i++) {
+            if((rank+i) < 7 && (file-i) > 0) {
+                int potentialAttackerSquare = (rank+i+1)*8+file-i-1;
+                if((enemyBishopsAndQueens & (1L << potentialAttackerSquare)) != 0) {
+                    return true;
+                }
+                if((allOccupied & (1L << potentialAttackerSquare)) != 0) {
+                    break; // in this direction a piece that can't attack is found, then we are done for the direction
+                }
+            }
+        }
+        for(int i = 0; i < 7; i++) {
+            if((rank+i) < 7 && (file-i) > 0) {
+                int potentialAttackerSquare = (rank+i+1)*8+file-i-1;
+                if((enemyBishopsAndQueens & (1L << potentialAttackerSquare)) != 0) {
+                    return true;
+                }
+                if((allOccupied & (1L << potentialAttackerSquare)) != 0) {
+                    break; // in this direction a piece that can't attack is found, then we are done for the direction
+                }
+            }
+        }
+        return false;
+    }
+
     /**
      * Checks if a square is attacked by white pieces.
      */
     private static boolean isSquareAttackedByWhite(int square, BoardState boardState) {
-        long allOccupied = boardState.allOccupied;
-        
         // Check for pawn attacks
         int rank = square / 8;
         int file = square % 8;
@@ -210,13 +328,13 @@ public class BitboardMoveGenerator {
         }
         
         // Check for bishop/queen attacks (diagonal)
-        long bishopAttacks = BitboardGenerator.getBishopAttacks(square, allOccupied);
+        long bishopAttacks = BitboardGenerator.getBishopAttacks(square, boardState.allOccupied);
         if ((bishopAttacks & (boardState.whitePieces[BoardState.INDEX_BISHOP] | boardState.whitePieces[BoardState.INDEX_QUEEN])) != 0) {
             return true;
         }
         
         // Check for rook/queen attacks (straight)
-        long rookAttacks = BitboardGenerator.getRookAttacks(square, allOccupied);
+        long rookAttacks = BitboardGenerator.getRookAttacks(square, boardState.allOccupied);
         if ((rookAttacks & (boardState.whitePieces[BoardState.INDEX_ROOK] | boardState.whitePieces[BoardState.INDEX_QUEEN])) != 0) {
             return true;
         }
@@ -228,8 +346,6 @@ public class BitboardMoveGenerator {
      * Checks if a square is attacked by black pieces.
      */
     private static boolean isSquareAttackedByBlack(int square, BoardState boardState) {
-        long allOccupied = boardState.allOccupied;
-        
         // Check for pawn attacks
         int rank = square / 8;
         int file = square % 8;
@@ -261,13 +377,13 @@ public class BitboardMoveGenerator {
         }
         
         // Check for bishop/queen attacks (diagonal)
-        long bishopAttacks = BitboardGenerator.getBishopAttacks(square, allOccupied);
+        long bishopAttacks = BitboardGenerator.getBishopAttacks(square,boardState.allOccupied);
         if ((bishopAttacks & (boardState.blackPieces[BoardState.INDEX_BISHOP] | boardState.blackPieces[BoardState.INDEX_QUEEN])) != 0) {
             return true;
         }
         
         // Check for rook/queen attacks (straight)
-        long rookAttacks = BitboardGenerator.getRookAttacks(square, allOccupied);
+        long rookAttacks = BitboardGenerator.getRookAttacks(square,boardState.allOccupied);
         if ((rookAttacks & (boardState.blackPieces[BoardState.INDEX_ROOK] | boardState.blackPieces[BoardState.INDEX_QUEEN])) != 0) {
             return true;
         }
@@ -301,15 +417,6 @@ public class BitboardMoveGenerator {
         generateBlackKingMoves(boardState, moves, lastMove);
         
         return moves;
-    }
-
-    // Helper methods for occupancy
-    private static long getWhiteOccupied(BoardState boardState) {
-        return boardState.whiteOccupied;
-    }
-
-    private static long getBlackOccupied(BoardState boardState) {
-        return boardState.blackOccupied;
     }
 
     // White pawn move generation
