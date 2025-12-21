@@ -2,8 +2,6 @@ package ch.adjudicator.agent.bitboard.generator;
 
 import ch.adjudicator.agent.bitboard.model.BoardState;
 import ch.adjudicator.agent.bitboard.model.FastMove;
-import com.github.bhlangonijr.chesslib.Bitboard;
-import com.github.bhlangonijr.chesslib.Board;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -149,45 +147,65 @@ public class BitboardMoveGenerator {
      * Checks if the specified side's king is in check.
      */
     public static boolean isKingInCheck(BoardState boardState, boolean isKingOfFocusWhite) {
-        long kingBitboard = isKingOfFocusWhite ? boardState.whitePieces[BoardState.INDEX_KING] : boardState.blackPieces[BoardState.INDEX_KING];
+        final long kingBitboard = isKingOfFocusWhite ? boardState.whitePieces[BoardState.INDEX_KING] : boardState.blackPieces[BoardState.INDEX_KING];
 
         if (kingBitboard == 0) {
             return false; // No king (shouldn't happen in valid position)
         }
 
-        int kingSquare = Long.numberOfTrailingZeros(kingBitboard);
-        long bishopAttacks = BitboardGenerator.getBishopAttacks(kingSquare, kingSquare);
         if(isKingOfFocusWhite) {
-            long potentialDiagonalAttackers = boardState.blackPieces[BoardState.INDEX_BISHOP] | boardState.blackPieces[BoardState.INDEX_QUEEN];
-            if(0 != (potentialDiagonalAttackers & bishopAttacks)) {
-                if(hasDiagonalAttackersUnblocked(potentialDiagonalAttackers, boardState.allOccupied, kingSquare)) {
-                    return true;
-                }
-            }
-            long potentialStraightAttackers = boardState.blackPieces[BoardState.INDEX_ROOK] | boardState.blackPieces[BoardState.INDEX_QUEEN];
-            if(0 != (potentialStraightAttackers & bishopAttacks)) {
-                if(hasStraightLineAttackersUnblocked(potentialStraightAttackers, boardState.allOccupied, kingSquare)) {
-                    return true;
-                }
-            }
-            if(0 != (BitboardGenerator.KNIGHT_ATTACKS[kingSquare] & boardState.blackPieces[BoardState.INDEX_KNIGHT])) {
+            if(0 != (BitboardGenerator.getBlackPawnCaptureLeft(boardState.blackPieces[BoardState.INDEX_PAWN], boardState.whiteOccupied) & kingBitboard)) {
                 return true;
+            }
+            if(0 != (BitboardGenerator.getBlackPawnCaptureRight(boardState.blackPieces[BoardState.INDEX_PAWN], boardState.whiteOccupied) & kingBitboard)) {
+                return true;
+            }
+
+            for (int square = 0; square < 64; square++) {
+                long squareBitboard = 1L << square;
+
+                if(0 != (boardState.blackPieces[BoardState.INDEX_KNIGHT] & squareBitboard)) {
+                    if(0 != (BitboardGenerator.KNIGHT_ATTACKS[square] & kingBitboard)) {
+                        return true;
+                    }
+                }
+                if((0 != (boardState.blackPieces[BoardState.INDEX_BISHOP] & squareBitboard)) || (0 != (boardState.blackPieces[BoardState.INDEX_QUEEN] & squareBitboard))) {
+                    if(0 != (BitboardGenerator.getBishopAttacks(square, boardState.allOccupied) & kingBitboard)) {
+                        return true;
+                    }
+                }
+                if((0 != (boardState.blackPieces[BoardState.INDEX_ROOK] & squareBitboard)) || (0 != (boardState.blackPieces[BoardState.INDEX_QUEEN] & squareBitboard))) {
+                    if(0 != (BitboardGenerator.getRookAttacks(square, boardState.allOccupied) & kingBitboard)) {
+                        return true;
+                    }
+                }
             }
         } else {
-            long potentialDiagonalAttackers = boardState.whitePieces[BoardState.INDEX_BISHOP] | boardState.whitePieces[BoardState.INDEX_QUEEN];
-            if(0 != (potentialDiagonalAttackers & bishopAttacks)) {
-                if(hasDiagonalAttackersUnblocked(potentialDiagonalAttackers, boardState.allOccupied, kingSquare)) {
-                    return true;
-                }
-            }
-            long potentialStraightAttackers = boardState.whitePieces[BoardState.INDEX_ROOK] | boardState.whitePieces[BoardState.INDEX_QUEEN];
-            if(0 != (potentialStraightAttackers & bishopAttacks)) {
-                if(hasStraightLineAttackersUnblocked(potentialStraightAttackers, boardState.allOccupied, kingSquare)) {
-                    return true;
-                }
-            }
-            if(0 != (BitboardGenerator.KNIGHT_ATTACKS[kingSquare] & boardState.whitePieces[BoardState.INDEX_KNIGHT])) {
+            if(0 != (BitboardGenerator.getWhitePawnCaptureLeft(boardState.whitePieces[BoardState.INDEX_PAWN], boardState.blackOccupied) & kingBitboard)) {
                 return true;
+            }
+            if(0 != (BitboardGenerator.getWhitePawnCaptureRight(boardState.whitePieces[BoardState.INDEX_PAWN], boardState.blackOccupied) & kingBitboard)) {
+                return true;
+            }
+
+            for (int square = 0; square < 64; square++) {
+                long squareBitboard = 1L << square;
+
+                if(0 != (boardState.whitePieces[BoardState.INDEX_KNIGHT] & squareBitboard)) {
+                    if(0 != (BitboardGenerator.KNIGHT_ATTACKS[square] & kingBitboard)) {
+                        return true;
+                    }
+                }
+                if((0 != (boardState.whitePieces[BoardState.INDEX_BISHOP] & squareBitboard)) || (0 != (boardState.whitePieces[BoardState.INDEX_QUEEN] & squareBitboard))) {
+                    if(0 != (BitboardGenerator.getBishopAttacks(square, boardState.allOccupied) & kingBitboard)) {
+                        return true;
+                    }
+                }
+                if((0 != (boardState.whitePieces[BoardState.INDEX_ROOK] & squareBitboard)) || (0 != (boardState.whitePieces[BoardState.INDEX_QUEEN] & squareBitboard))) {
+                    if(0 != (BitboardGenerator.getRookAttacks(square, boardState.allOccupied) & kingBitboard)) {
+                        return true;
+                    }
+                }
             }
         }
         return false;
@@ -401,8 +419,15 @@ public class BitboardMoveGenerator {
         generateWhiteRookMoves(boardState, moves);
         generateWhiteQueenMoves(boardState, moves);
         generateWhiteKingMoves(boardState, moves, lastMove);
-        
-        return moves;
+
+        List<FastMove> validMoves = new ArrayList<>();
+        for(FastMove move : moves) {
+            BoardState boardStateAfterMove = boardState.applyMove(move);
+            if(!isKingInCheck(boardStateAfterMove, boardState.isWhiteToMove())) {
+                validMoves.add(move);
+            }
+        }
+        return validMoves;
     }
 
     private static List<FastMove> generateBlackMoves(BoardState boardState, FastMove lastMove) {
@@ -415,8 +440,16 @@ public class BitboardMoveGenerator {
         generateBlackRookMoves(boardState, moves);
         generateBlackQueenMoves(boardState, moves);
         generateBlackKingMoves(boardState, moves, lastMove);
-        
-        return moves;
+
+        List<FastMove> validMoves = new ArrayList<>();
+        for(FastMove move : moves) {
+            BoardState boardStateAfterMove = boardState.applyMove(move);
+            if(!isKingInCheck(boardStateAfterMove, boardState.isWhiteToMove())) {
+                validMoves.add(move);
+            }
+        }
+
+        return validMoves;
     }
 
     // White pawn move generation
@@ -717,7 +750,7 @@ public class BitboardMoveGenerator {
             
             // Castling
             // Kingside castling
-            if (boardState.isWhiteKingsideCastling() && from == 4) {
+            if (boardState.isWhiteKingsideCastlingPossible() && from == 4) {
                 if ((boardState.allOccupied & 0x60L) == 0) { // f1 and g1 empty
                     // Check that king is not in check and doesn't pass through check
                     if (!isSquareAttackedByBlack(4, boardState) && 
@@ -729,7 +762,7 @@ public class BitboardMoveGenerator {
             }
             
             // Queenside castling
-            if (boardState.isWhiteQueensideCastling() && from == 4) {
+            if (boardState.isWhiteQueensideCastlingPossible() && from == 4) {
                 if ((boardState.allOccupied & 0x0EL) == 0) { // b1, c1, d1 empty
                     // Check that king is not in check and doesn't pass through check
                     if (!isSquareAttackedByBlack(4, boardState) && 
@@ -759,7 +792,7 @@ public class BitboardMoveGenerator {
             
             // Castling
             // Kingside castling
-            if (boardState.isBlackKingsideCastling() && from == 60) {
+            if (boardState.isBlackKingsideCastlingPossible() && from == 60) {
                 if ((boardState.allOccupied & 0x6000000000000000L) == 0) { // f8 and g8 empty
                     // Check that king is not in check and doesn't pass through check
                     if (!isSquareAttackedByWhite(60, boardState) && 
@@ -771,7 +804,7 @@ public class BitboardMoveGenerator {
             }
             
             // Queenside castling
-            if (boardState.isBlackQueensideCastling() && from == 60) {
+            if (boardState.isBlackQueensideCastlingPossible() && from == 60) {
                 if ((boardState.allOccupied & 0x0E00000000000000L) == 0) { // b8, c8, d8 empty
                     // Check that king is not in check and doesn't pass through check
                     if (!isSquareAttackedByWhite(60, boardState) && 

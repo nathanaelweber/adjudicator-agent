@@ -159,10 +159,10 @@ public class ChessLibAdapter {
         // Castling rights
         fen.append(' ');
         StringBuilder castling = new StringBuilder();
-        if (state.isWhiteKingsideCastling()) castling.append('K');
-        if (state.isWhiteQueensideCastling()) castling.append('Q');
-        if (state.isBlackKingsideCastling()) castling.append('k');
-        if (state.isBlackQueensideCastling()) castling.append('q');
+        if (state.isWhiteKingsideCastlingPossible()) castling.append('K');
+        if (state.isWhiteQueensideCastlingPossible()) castling.append('Q');
+        if (state.isBlackKingsideCastlingPossible()) castling.append('k');
+        if (state.isBlackQueensideCastlingPossible()) castling.append('q');
         if (castling.isEmpty()) {
             fen.append('-');
         } else {

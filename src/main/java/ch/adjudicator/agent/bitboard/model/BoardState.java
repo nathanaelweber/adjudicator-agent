@@ -220,19 +220,19 @@ public class BoardState {
         return (bitAuxiliaries & (1L << INDEX_WHITE_TO_MOVE)) != 0;
     }
     
-    public boolean isWhiteKingsideCastling() {
+    public boolean isWhiteKingsideCastlingPossible() {
         return (bitAuxiliaries & (1L << INDEX_WHITE_KINGSIDE_CASTLING_RIGHT_INTACT)) != 0;
     }
     
-    public boolean isWhiteQueensideCastling() {
+    public boolean isWhiteQueensideCastlingPossible() {
         return (bitAuxiliaries & (1L << INDEX_WHITE_QUEENSIDE_CASTLING_RIGHT_INTACT)) != 0;
     }
     
-    public boolean isBlackKingsideCastling() {
+    public boolean isBlackKingsideCastlingPossible() {
         return (bitAuxiliaries & (1L << INDEX_BLACK_KINGSIDE_CASTLING_RIGHT_INTACT)) != 0;
     }
     
-    public boolean isBlackQueensideCastling() {
+    public boolean isBlackQueensideCastlingPossible() {
         return (bitAuxiliaries & (1L << INDEX_BLACK_QUEENSIDE_CASTLING_RIGHT_INTACT)) != 0;
     }
     

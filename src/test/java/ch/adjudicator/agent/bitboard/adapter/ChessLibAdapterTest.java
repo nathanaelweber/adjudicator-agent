@@ -34,10 +34,10 @@ class ChessLibAdapterTest {
 
         // Check game state
         assertTrue(state.isWhiteToMove(), "White should be to move");
-        assertTrue(state.isWhiteKingsideCastling(), "White kingside castling should be available");
-        assertTrue(state.isWhiteQueensideCastling(), "White queenside castling should be available");
-        assertTrue(state.isBlackKingsideCastling(), "Black kingside castling should be available");
-        assertTrue(state.isBlackQueensideCastling(), "Black queenside castling should be available");
+        assertTrue(state.isWhiteKingsideCastlingPossible(), "White kingside castling should be available");
+        assertTrue(state.isWhiteQueensideCastlingPossible(), "White queenside castling should be available");
+        assertTrue(state.isBlackKingsideCastlingPossible(), "Black kingside castling should be available");
+        assertTrue(state.isBlackQueensideCastlingPossible(), "Black queenside castling should be available");
         assertEquals(-1, state.getEnPassantSquare(), "No en passant square");
     }
 
@@ -63,10 +63,10 @@ class ChessLibAdapterTest {
         assertEquals(0L, state.blackPieces[BoardState.INDEX_QUEEN]);
 
         // No castling rights
-        assertFalse(state.isWhiteKingsideCastling());
-        assertFalse(state.isWhiteQueensideCastling());
-        assertFalse(state.isBlackKingsideCastling());
-        assertFalse(state.isBlackQueensideCastling());
+        assertFalse(state.isWhiteKingsideCastlingPossible());
+        assertFalse(state.isWhiteQueensideCastlingPossible());
+        assertFalse(state.isBlackKingsideCastlingPossible());
+        assertFalse(state.isBlackQueensideCastlingPossible());
     }
 
     @Test
@@ -83,10 +83,10 @@ class ChessLibAdapterTest {
         String fen = "r3k2r/8/8/8/8/8/8/R3K2R w Kq - 5 10";
         BoardState state = ChessLibAdapter.fenToBoardState(fen);
 
-        assertTrue(state.isWhiteKingsideCastling(), "White kingside castling available");
-        assertFalse(state.isWhiteQueensideCastling(), "White queenside castling not available");
-        assertFalse(state.isBlackKingsideCastling(), "Black kingside castling not available");
-        assertTrue(state.isBlackQueensideCastling(), "Black queenside castling available");
+        assertTrue(state.isWhiteKingsideCastlingPossible(), "White kingside castling available");
+        assertFalse(state.isWhiteQueensideCastlingPossible(), "White queenside castling not available");
+        assertFalse(state.isBlackKingsideCastlingPossible(), "Black kingside castling not available");
+        assertTrue(state.isBlackQueensideCastlingPossible(), "Black queenside castling available");
     }
 
     @Test
@@ -146,10 +146,10 @@ class ChessLibAdapterTest {
         assertNotEquals(0L, state.blackPieces[BoardState.INDEX_QUEEN]);
 
         // Verify castling rights
-        assertTrue(state.isWhiteKingsideCastling());
-        assertTrue(state.isWhiteQueensideCastling());
-        assertTrue(state.isBlackKingsideCastling());
-        assertTrue(state.isBlackQueensideCastling());
+        assertTrue(state.isWhiteKingsideCastlingPossible());
+        assertTrue(state.isWhiteQueensideCastlingPossible());
+        assertTrue(state.isBlackKingsideCastlingPossible());
+        assertTrue(state.isBlackQueensideCastlingPossible());
 
         // Round-trip test
         String reconstructedFen = ChessLibAdapter.boardStateToFen(state);
@@ -176,10 +176,10 @@ class ChessLibAdapterTest {
         BoardState state = ChessLibAdapter.fenToBoardState(fen);
 
         assertFalse(state.isWhiteToMove());
-        assertTrue(state.isWhiteKingsideCastling());
-        assertTrue(state.isWhiteQueensideCastling());
-        assertTrue(state.isBlackKingsideCastling());
-        assertTrue(state.isBlackQueensideCastling());
+        assertTrue(state.isWhiteKingsideCastlingPossible());
+        assertTrue(state.isWhiteQueensideCastlingPossible());
+        assertTrue(state.isBlackKingsideCastlingPossible());
+        assertTrue(state.isBlackQueensideCastlingPossible());
 
         String reconstructedFen = ChessLibAdapter.boardStateToFen(state);
         assertEquals(fen, reconstructedFen);

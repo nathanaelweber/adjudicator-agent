@@ -229,10 +229,10 @@ class EnPassantRoundtripTest {
         BoardState state = ChessLibAdapter.fenToBoardState(fen);
         
         assertEquals(43, state.getEnPassantSquare(), "En passant square should be d6 (43)");
-        assertTrue(state.isWhiteKingsideCastling());
-        assertTrue(state.isWhiteQueensideCastling());
-        assertTrue(state.isBlackKingsideCastling());
-        assertTrue(state.isBlackQueensideCastling());
+        assertTrue(state.isWhiteKingsideCastlingPossible());
+        assertTrue(state.isWhiteQueensideCastlingPossible());
+        assertTrue(state.isBlackKingsideCastlingPossible());
+        assertTrue(state.isBlackQueensideCastlingPossible());
         
         String reconstructedFen = ChessLibAdapter.boardStateToFen(state);
         assertEquals(fen, reconstructedFen, "FEN should round-trip correctly");
@@ -244,10 +244,10 @@ class EnPassantRoundtripTest {
         BoardState state = ChessLibAdapter.fenToBoardState(fen);
         
         assertEquals(19, state.getEnPassantSquare(), "En passant square should be d3 (19)");
-        assertFalse(state.isWhiteKingsideCastling());
-        assertFalse(state.isWhiteQueensideCastling());
-        assertFalse(state.isBlackKingsideCastling());
-        assertFalse(state.isBlackQueensideCastling());
+        assertFalse(state.isWhiteKingsideCastlingPossible());
+        assertFalse(state.isWhiteQueensideCastlingPossible());
+        assertFalse(state.isBlackKingsideCastlingPossible());
+        assertFalse(state.isBlackQueensideCastlingPossible());
         
         String reconstructedFen = ChessLibAdapter.boardStateToFen(state);
         assertEquals(fen, reconstructedFen, "FEN should round-trip correctly");

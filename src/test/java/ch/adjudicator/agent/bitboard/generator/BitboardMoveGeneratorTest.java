@@ -3,6 +3,8 @@ package ch.adjudicator.agent.bitboard.generator;
 import ch.adjudicator.agent.bitboard.adapter.ChessLibAdapter;
 import ch.adjudicator.agent.bitboard.model.BoardState;
 import ch.adjudicator.agent.bitboard.model.FastMove;
+import com.github.bhlangonijr.chesslib.Board;
+import com.github.bhlangonijr.chesslib.move.Move;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -234,7 +236,7 @@ class BitboardMoveGeneratorTest {
         
         // KiwiPete position has 48 legal moves from white's perspective
         // Note: This is pseudo-legal move count (doesn't check for king safety)
-        assertTrue(moves.size() > 0, "Should generate moves for complex position");
+        assertFalse(moves.isEmpty(), "Should generate moves for complex position");
     }
 
     @Test
@@ -245,18 +247,43 @@ class BitboardMoveGeneratorTest {
         List<FastMove> moves = BitboardMoveGenerator.generateMoves(state, null);
 
         // expect exactly 39 possible moves
-        assertTrue(moves.size() == 39, "Should generate moves for complex position");
+        assertEquals(39, moves.size(), "Should generate moves for complex position");
     }
 
     @Test
-    void testCheckmatePosition() {
+    void testOnlyOneMoveLeftPosition() {
         String fen = "rn1qkbnr/ppp2Bpp/3p4/4N3/4P1b1/8/PPPPQPPP/RNB1K2R b KQkq - 0 1";
         BoardState state = ChessLibAdapter.fenToBoardState(fen);
 
         List<FastMove> moves = BitboardMoveGenerator.generateMoves(state, null);
 
-        // expect exactly 0 possible moves
-        assertTrue(moves.isEmpty(), "Should generate zero positions, since is in checkmate");
-        assertTrue(BitboardMoveGenerator.isCurrentPlayerInCheck(state), "Should be in check");
+        // expect exactly 1 possible move
+        assertEquals(1, moves.size(), "Should generate the single valid position");
+        assertEquals("e8e7", ChessLibAdapter.convertFastMoveToChessLibMove(moves.getFirst()).toString().toLowerCase());
+    }
+
+    @Test
+    void testKnightForward() {
+        String fen = "r1bqkb1r/pppppppp/2n5/8/4n2P/P4P2/1PPPP1P1/RNBQKBNR w KQkq - 0 1";
+        BoardState state = ChessLibAdapter.fenToBoardState(fen);
+
+        List<FastMove> fastMoves = BitboardMoveGenerator.generateMoves(state, null);
+
+        Board board = new Board();
+        board.loadFromFen(fen);
+
+        for(Move legalMoveExpected : board.legalMoves()) {
+            board.doMove(legalMoveExpected);
+            boolean foundLegalMove = false;
+            for(FastMove fastMove : fastMoves) {
+                if(ChessLibAdapter.convertFastMoveToChessLibMove(fastMove).equals(legalMoveExpected)) {
+                    foundLegalMove = true;
+                    break;
+                }
+            }
+            assertTrue(foundLegalMove, "Move " + legalMoveExpected + " not found in generated moves. Board: " + board.getFen() + " actualFastMovesFound: " + fastMoves);
+            board.undoMove();
+        }
+        assertEquals(board.legalMoves().size(), fastMoves.size());
     }
 }

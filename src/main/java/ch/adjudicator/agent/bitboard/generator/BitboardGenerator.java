@@ -29,13 +29,13 @@ public final class BitboardGenerator {
      * Rook occupancy masks for all 64 squares.
      * Excludes edge squares (except the rook's square) to reduce table size.
      */
-    private static final long[] ROOK_MASKS = new long[64];
+    public static final long[] ROOK_MASKS = new long[64];
     
     /**
      * Bishop occupancy masks for all 64 squares.
      * Excludes edge squares (except the bishop's square) to reduce table size.
      */
-    private static final long[] BISHOP_MASKS = new long[64];
+    public static final long[] BISHOP_MASKS = new long[64];
     
     /**
      * Precomputed magic numbers for rook attack generation.

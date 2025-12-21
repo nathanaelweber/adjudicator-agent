@@ -34,10 +34,10 @@ class ApplyMoveTest {
         assertFalse(newState.isWhiteToMove(), "Should be black's turn");
         
         // Check castling rights preserved
-        assertTrue(newState.isWhiteKingsideCastling());
-        assertTrue(newState.isWhiteQueensideCastling());
-        assertTrue(newState.isBlackKingsideCastling());
-        assertTrue(newState.isBlackQueensideCastling());
+        assertTrue(newState.isWhiteKingsideCastlingPossible());
+        assertTrue(newState.isWhiteQueensideCastlingPossible());
+        assertTrue(newState.isBlackKingsideCastlingPossible());
+        assertTrue(newState.isBlackQueensideCastlingPossible());
         
         // Check en passant square set
         assertEquals(20, newState.getEnPassantSquare(), "En passant square should be e3 (20)");
@@ -95,12 +95,12 @@ class ApplyMoveTest {
         assertNotEquals(0, newState.whitePieces[BoardState.INDEX_ROOK] & (1L << 5));
         
         // Check white castling rights removed
-        assertFalse(newState.isWhiteKingsideCastling());
-        assertFalse(newState.isWhiteQueensideCastling());
+        assertFalse(newState.isWhiteKingsideCastlingPossible());
+        assertFalse(newState.isWhiteQueensideCastlingPossible());
         
         // Check black castling rights preserved
-        assertTrue(newState.isBlackKingsideCastling());
-        assertTrue(newState.isBlackQueensideCastling());
+        assertTrue(newState.isBlackKingsideCastlingPossible());
+        assertTrue(newState.isBlackQueensideCastlingPossible());
         
         // Check side toggled
         assertFalse(newState.isWhiteToMove());
@@ -128,8 +128,8 @@ class ApplyMoveTest {
         assertNotEquals(0, newState.whitePieces[BoardState.INDEX_ROOK] & (1L << 3));
         
         // Check white castling rights removed
-        assertFalse(newState.isWhiteKingsideCastling());
-        assertFalse(newState.isWhiteQueensideCastling());
+        assertFalse(newState.isWhiteKingsideCastlingPossible());
+        assertFalse(newState.isWhiteQueensideCastlingPossible());
     }
 
     @Test
@@ -154,8 +154,8 @@ class ApplyMoveTest {
         assertNotEquals(0, newState.blackPieces[BoardState.INDEX_ROOK] & (1L << 61));
         
         // Check black castling rights removed
-        assertFalse(newState.isBlackKingsideCastling());
-        assertFalse(newState.isBlackQueensideCastling());
+        assertFalse(newState.isBlackKingsideCastlingPossible());
+        assertFalse(newState.isBlackQueensideCastlingPossible());
         
         // Check side toggled
         assertTrue(newState.isWhiteToMove());
@@ -183,8 +183,8 @@ class ApplyMoveTest {
         assertNotEquals(0, newState.blackPieces[BoardState.INDEX_ROOK] & (1L << 59));
         
         // Check black castling rights removed
-        assertFalse(newState.isBlackKingsideCastling());
-        assertFalse(newState.isBlackQueensideCastling());
+        assertFalse(newState.isBlackKingsideCastlingPossible());
+        assertFalse(newState.isBlackQueensideCastlingPossible());
     }
 
     @Test
@@ -305,12 +305,12 @@ class ApplyMoveTest {
         BoardState newState = state.applyMove(move);
         
         // Check white castling rights cleared
-        assertFalse(newState.isWhiteKingsideCastling());
-        assertFalse(newState.isWhiteQueensideCastling());
+        assertFalse(newState.isWhiteKingsideCastlingPossible());
+        assertFalse(newState.isWhiteQueensideCastlingPossible());
         
         // Check black castling rights preserved
-        assertTrue(newState.isBlackKingsideCastling());
-        assertTrue(newState.isBlackQueensideCastling());
+        assertTrue(newState.isBlackKingsideCastlingPossible());
+        assertTrue(newState.isBlackQueensideCastlingPossible());
     }
 
     @Test
@@ -329,8 +329,8 @@ class ApplyMoveTest {
         BoardState newState = state.applyMove(move);
         
         // Check only kingside castling cleared
-        assertFalse(newState.isWhiteKingsideCastling());
-        assertTrue(newState.isWhiteQueensideCastling());
+        assertFalse(newState.isWhiteKingsideCastlingPossible());
+        assertTrue(newState.isWhiteQueensideCastlingPossible());
     }
 
     @Test
@@ -349,12 +349,12 @@ class ApplyMoveTest {
         BoardState newState = state.applyMove(move);
         
         // Check black kingside castling cleared
-        assertFalse(newState.isBlackKingsideCastling());
+        assertFalse(newState.isBlackKingsideCastlingPossible());
         
         // Check other castling rights preserved
-        assertTrue(newState.isWhiteKingsideCastling());
-        assertTrue(newState.isWhiteQueensideCastling());
-        assertTrue(newState.isBlackQueensideCastling());
+        assertTrue(newState.isWhiteKingsideCastlingPossible());
+        assertTrue(newState.isWhiteQueensideCastlingPossible());
+        assertTrue(newState.isBlackQueensideCastlingPossible());
     }
 
     @Test
