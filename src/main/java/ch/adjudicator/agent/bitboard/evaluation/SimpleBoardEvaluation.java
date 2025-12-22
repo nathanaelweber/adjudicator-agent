@@ -206,12 +206,12 @@ public class SimpleBoardEvaluation {
 
         for (int pieceType = 0; pieceType < 5; pieceType++) {
             for(int square = 0; square < 64; square++) {
-                if((int)(boardState.whitePieces[pieceType] & (1L << square)) != 0) {
+                if((boardState.whitePieces[pieceType] & (1L << square)) != 0) {
                     midGameScore += signWhite * mg_table[pieceType*2][square];
                     endGameScore += signWhite * eg_table[pieceType*2][square];
                     gamePhase += gamephaseInc[pieceType*2];
                 }
-                if((int)(boardState.blackPieces[pieceType] & (1L << square)) != 0) {
+                if((boardState.blackPieces[pieceType] & (1L << square)) != 0) {
                     midGameScore += signBlack * mg_table[pieceType*2+1][square];
                     endGameScore += signBlack * eg_table[pieceType*2+1][square];
                     gamePhase += gamephaseInc[pieceType*2];
