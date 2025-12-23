@@ -7,6 +7,8 @@ import com.github.bhlangonijr.chesslib.Board;
 import com.github.bhlangonijr.chesslib.move.Move;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -260,6 +262,22 @@ class BitboardMoveGeneratorTest {
         // expect exactly 1 possible move
         assertEquals(1, moves.size(), "Should generate the single valid position");
         assertEquals("e8e7", ChessLibAdapter.convertFastMoveToChessLibMove(moves.getFirst()).toString().toLowerCase());
+    }
+
+    @Test
+    void testOnlyThreeMovesLeftForBlackPositionEscapingPathForWhite() {
+        String fen = "1rk5/8/8/K1Q5/8/8/8/8 b - - 0 1";
+        BoardState state = ChessLibAdapter.fenToBoardState(fen);
+
+        List<FastMove> moves = BitboardMoveGenerator.generateMoves(state, ChessLibAdapter.fastMoveFromSimpleFen("2k5/8/8/K1Q5/8/8/8/1r6 b - - 0 1", "e7c5"));
+
+        // expect exactly 3 possible moves
+        assertEquals(3, moves.size(), "Should generate the only three valid moves");
+        List<String> movesString = new ArrayList<>(moves.stream().map(move -> ChessLibAdapter.convertFastMoveToChessLibMove(move).toString().toLowerCase()).toList());
+        Collections.sort(movesString);
+        assertEquals("c8b7", movesString.get(0));
+        assertEquals("c8d7", movesString.get(1));
+        assertEquals("c8d8", movesString.get(2));
     }
 
     @Test

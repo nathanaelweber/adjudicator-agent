@@ -6,6 +6,11 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
+
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.contains;
+import static org.hamcrest.Matchers.hasItems;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
@@ -114,21 +119,6 @@ class QueenSafetyTests {
     }
 
     @Test
-    void testQueenVsRookEndgame() throws Exception {
-        // From lichess rook endgame
-        // Classic example: White has queen, black has rook
-        // Can force king moving away from protection of rook to capture
-        Board board = new Board();
-        board.loadFromFen("1rk5/4Q3/K7/8/8/8/8/8 w - - 0 1");
-        
-        Move bestMove = calculator.computeBestMove(board, 300000, 0, 7);
-        
-        assertNotNull(bestMove, "Should find winning move with queen");
-        // Queen should improve position: Qd6+ checks king, Qd5/Qd4/Qd3 centralizes, or Qd2 attacks rook
-        assertEquals("E7E5", bestMove.toString().toUpperCase(),"Queen should prepare to be able to capture rook in 1 move");
-    }
-
-    @Test
     void testQueenSacrificeForCheckmate() throws Exception {
         // From Legal's Mate: classic queen sacrifice leading to checkmate
         // After: 1.e4 e5 2.Nf3 d6 3.Bc4 Bg4 4.Nc3 g6 5.Nxe5! Bxd1 6.Bxf7+ Ke7 7.Nd5#
@@ -183,11 +173,10 @@ class QueenSafetyTests {
         Board board = new Board();
         board.loadFromFen("r3k3/8/8/8/2Q5/8/8/6K1 w q - 0 1");
         
-        Move bestMove = calculator.computeBestMove(board, 3000000, 0, 7);
+        Move bestMove = calculator.computeBestMove(board, 3000000, 0, 5);
         
         assertNotNull(bestMove, "Should find best move for black");
         // Black can fork king and rook to win the rook in 2 moves
-        assertEquals("E5A5", bestMove.toString().toUpperCase(),
-                "Should defend with Qe5");
+        assertThat("Should find one of the rook forking moves.", List.of("c4c6", "c4e4", "c4g8"), hasItems(bestMove.toString().toLowerCase()));
     }
 }

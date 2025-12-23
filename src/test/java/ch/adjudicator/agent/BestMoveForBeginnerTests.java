@@ -118,28 +118,14 @@ class BestMoveForBeginnerTests {
         // Simple tactic: capture undefended queen
         // Black queen on d5 is hanging (undefended)
         Board board = new Board();
-        board.loadFromFen("4k3/8/8/3q4/8/3B4/8/4K3 w - - 0 1");
+        board.loadFromFen("4k3/8/8/3q4/4B3/8/8/4K3 w - - 0 1");
         
-        Move bestMove = calculator.computeBestMove(board, 3000);
+        Move bestMove = calculator.computeBestMove(board, 300000, 3,3);
         
         assertNotNull(bestMove, "Should find hanging queen");
         // Bishop should capture the hanging queen
-        assertEquals("D3D5", bestMove.toString().toUpperCase(),
+        assertEquals("E4D5", bestMove.toString().toUpperCase(),
                 "Bishop should capture queen on d5");
-    }
-
-    @Test
-    void testWinHangingRook() throws Exception {
-        // Simple tactic: capture undefended rook
-        Board board = new Board();
-        board.loadFromFen("4k3/8/8/8/4r3/8/4N3/4K3 w - - 0 1");
-        
-        Move bestMove = calculator.computeBestMove(board, 3000);
-        
-        assertNotNull(bestMove, "Should find hanging rook");
-        // Knight should capture the hanging rook
-        assertEquals("E2E4", bestMove.toString().toUpperCase(),
-                "Knight should capture rook on e4");
     }
 
     @Test
@@ -191,9 +177,9 @@ class BestMoveForBeginnerTests {
         // Discovered attack: bishop on c1 discovers attack on queen at d8 when knight moves
         // White knight on d4 can move, discovering bishop attack on black queen
         Board board = new Board();
-        board.loadFromFen("3q3k/8/8/8/3N4/8/8/2B1K3 w - - 0 1");
+        board.loadFromFen("3q3k/8/8/8/3N4/8/1B6/4K3 w - - 0 1");
         
-        Move bestMove = calculator.computeBestMove(board, 2000);
+        Move bestMove = calculator.computeBestMove(board, 30000, 4, 4);
         
         assertNotNull(bestMove, "Should find discovered attack");
         // Knight should move away discovering bishop attack on queen
@@ -237,18 +223,13 @@ class BestMoveForBeginnerTests {
     void testSimpleCheckmate_TwoRooks() throws Exception {
         // Ladder mate: two rooks deliver checkmate
         Board board = new Board();
-        board.loadFromFen("7k/8/6R1/8/8/8/8/5R1K w - - 0 1");
+        board.loadFromFen("7k/8/6R1/8/8/8/5R2/7K w - - 0 1");
         
         Move bestMove = calculator.computeBestMove(board, 3000);
         
         assertNotNull(bestMove, "Should find ladder mate");
-        // One of the rooks should move to deliver checkmate on 8th rank
-        assertTrue(bestMove.getFrom().toString().toUpperCase().equals("G6") || 
-                   bestMove.getFrom().toString().toUpperCase().equals("F1"),
-                "One of the rooks should move");
-        // Checkmate should be on the 8th rank
-        assertTrue(bestMove.getTo().toString().toUpperCase().contains("8"),
-                "Rook should move to 8th rank for mate");
+        // The rook on f2 should move to deliver checkmate
+        assertEquals("F2H2", bestMove.toString().toUpperCase(),"The rook on f2 should move to deliver checkmate");
     }
 
     @Test

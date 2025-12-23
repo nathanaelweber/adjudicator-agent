@@ -240,4 +240,18 @@ public class ChessLibAdapter {
         
         return new Move(fromSquare, toSquare, promotion);
     }
+
+
+
+    public static FastMove fastMoveFromSimpleFen(String boardStateFen, String moveFen) {
+        Board board = new Board();
+        board.loadFromFen(boardStateFen);
+        Move move = new Move(moveFen, board.getSideToMove());
+        return FastMove.builder()
+                .originSquare(move.getFrom().ordinal())
+                .destinationSquare(move.getTo().ordinal())
+                .promotion(move.getPromotion() != Piece.NONE)
+                .pieceTypeToPromote(move.getPromotion() == Piece.NONE ? 0 : getPieceIndex(move.getPromotion()))
+                .build();
+    }
 }
