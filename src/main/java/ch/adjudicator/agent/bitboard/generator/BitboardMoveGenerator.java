@@ -179,6 +179,11 @@ public class BitboardMoveGenerator {
                         return true;
                     }
                 }
+                if((0 != (boardState.blackPieces[BoardState.INDEX_KING] & squareBitboard)) ) {
+                    if(0 != (BitboardGenerator.KING_ATTACKS[square] & kingBitboard)) {
+                        return true;
+                    }
+                }
             }
         } else {
             if(0 != (BitboardGenerator.getWhitePawnCaptureLeft(boardState.whitePieces[BoardState.INDEX_PAWN], boardState.blackOccupied) & kingBitboard)) {
@@ -203,6 +208,11 @@ public class BitboardMoveGenerator {
                 }
                 if((0 != (boardState.whitePieces[BoardState.INDEX_ROOK] & squareBitboard)) || (0 != (boardState.whitePieces[BoardState.INDEX_QUEEN] & squareBitboard))) {
                     if(0 != (BitboardGenerator.getRookAttacks(square, boardState.allOccupied) & kingBitboard)) {
+                        return true;
+                    }
+                }
+                if((0 != (boardState.whitePieces[BoardState.INDEX_KING] & squareBitboard)) ) {
+                    if(0 != (BitboardGenerator.KING_ATTACKS[square] & kingBitboard)) {
                         return true;
                     }
                 }
