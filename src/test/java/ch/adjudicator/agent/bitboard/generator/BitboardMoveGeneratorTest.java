@@ -261,7 +261,7 @@ class BitboardMoveGeneratorTest {
 
         // expect exactly 1 possible move
         assertEquals(1, moves.size(), "Should generate the single valid position");
-        assertEquals("e8e7", ChessLibAdapter.convertFastMoveToChessLibMove(moves.getFirst()).toString().toLowerCase());
+        assertEquals("e8e7", ChessLibAdapter.convertFastMoveToChessLibMove(moves.getFirst(), state.isWhiteToMove()).toString().toLowerCase());
     }
 
     @Test
@@ -273,7 +273,7 @@ class BitboardMoveGeneratorTest {
 
         // expect exactly 3 possible moves
         assertEquals(3, moves.size(), "Should generate the only three valid moves");
-        List<String> movesString = new ArrayList<>(moves.stream().map(move -> ChessLibAdapter.convertFastMoveToChessLibMove(move).toString().toLowerCase()).toList());
+        List<String> movesString = new ArrayList<>(moves.stream().map(move -> ChessLibAdapter.convertFastMoveToChessLibMove(move, state.isWhiteToMove()).toString().toLowerCase()).toList());
         Collections.sort(movesString);
         assertEquals("c8b7", movesString.get(0));
         assertEquals("c8d7", movesString.get(1));
@@ -294,7 +294,7 @@ class BitboardMoveGeneratorTest {
             board.doMove(legalMoveExpected);
             boolean foundLegalMove = false;
             for(FastMove fastMove : fastMoves) {
-                if(ChessLibAdapter.convertFastMoveToChessLibMove(fastMove).equals(legalMoveExpected)) {
+                if(ChessLibAdapter.convertFastMoveToChessLibMove(fastMove, state.isWhiteToMove()).equals(legalMoveExpected)) {
                     foundLegalMove = true;
                     break;
                 }
@@ -319,7 +319,56 @@ class BitboardMoveGeneratorTest {
             board.doMove(legalMoveExpected);
             boolean foundLegalMove = false;
             for(FastMove fastMove : fastMoves) {
-                if(ChessLibAdapter.convertFastMoveToChessLibMove(fastMove).equals(legalMoveExpected)) {
+                if(ChessLibAdapter.convertFastMoveToChessLibMove(fastMove, state.isWhiteToMove()).equals(legalMoveExpected)) {
+                    foundLegalMove = true;
+                    break;
+                }
+            }
+            assertTrue(foundLegalMove, "Move " + legalMoveExpected + " not found in generated moves. Board: " + board.getFen() + " actualFastMovesFound: " + fastMoves);
+            board.undoMove();
+        }
+        assertEquals(board.legalMoves().size(), fastMoves.size());
+    }
+
+    @Test
+    void simplePromotionMove() {
+        String fen = "2k5/8/8/8/8/6K1/2p5/8 b - - 0 1";
+        BoardState state = ChessLibAdapter.fenToBoardState(fen);
+
+        List<FastMove> fastMoves = BitboardMoveGenerator.generateMoves(state, null);
+
+        Board board = new Board();
+        board.loadFromFen(fen);
+
+        for(Move legalMoveExpected : board.legalMoves()) {
+            board.doMove(legalMoveExpected);
+            boolean foundLegalMove = false;
+            for(FastMove fastMove : fastMoves) {
+                if(ChessLibAdapter.convertFastMoveToChessLibMove(fastMove, state.isWhiteToMove()).equals(legalMoveExpected)) {
+                    foundLegalMove = true;
+                    break;
+                }
+            }
+            assertTrue(foundLegalMove, "Move " + legalMoveExpected + " not found in generated moves. Board: " + board.getFen() + " actualFastMovesFound: " + fastMoves);
+            board.undoMove();
+        }
+        assertEquals(board.legalMoves().size(), fastMoves.size());
+    }
+    @Test
+    void promotionWithinFullBoardMove() {
+        String fen = "2k1N1n1/4Q2b/1P6/8/8/B4PK1/2p5/8 b - - 0 1";
+        BoardState state = ChessLibAdapter.fenToBoardState(fen);
+
+        List<FastMove> fastMoves = BitboardMoveGenerator.generateMoves(state, null);
+
+        Board board = new Board();
+        board.loadFromFen(fen);
+
+        for(Move legalMoveExpected : board.legalMoves()) {
+            board.doMove(legalMoveExpected);
+            boolean foundLegalMove = false;
+            for(FastMove fastMove : fastMoves) {
+                if(ChessLibAdapter.convertFastMoveToChessLibMove(fastMove, state.isWhiteToMove()).equals(legalMoveExpected)) {
                     foundLegalMove = true;
                     break;
                 }

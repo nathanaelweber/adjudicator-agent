@@ -221,7 +221,7 @@ public class ChessLibAdapter {
      * @param fastMove FastMove with origin, destination, and special flags
      * @return ChessLib Move object
      */
-    public static Move convertFastMoveToChessLibMove(FastMove fastMove) {
+    public static Move convertFastMoveToChessLibMove(FastMove fastMove, boolean isWhiteToMove) {
         Square fromSquare = Square.values()[fastMove.originSquare];
         Square toSquare = Square.values()[fastMove.destinationSquare];
         
@@ -229,13 +229,23 @@ public class ChessLibAdapter {
         if (fastMove.promotion) {
             // Map pieceTypeToPromote to ChessLib Piece
             // Note: We use WHITE pieces here; ChessLib Move handles color internally
-            promotion = switch (fastMove.pieceTypeToPromote) {
-                case BoardState.INDEX_KNIGHT -> Piece.WHITE_KNIGHT;
-                case BoardState.INDEX_BISHOP -> Piece.WHITE_BISHOP;
-                case BoardState.INDEX_ROOK -> Piece.WHITE_ROOK;
-                case BoardState.INDEX_QUEEN -> Piece.WHITE_QUEEN;
-                default -> Piece.NONE;
-            };
+            if(isWhiteToMove) {
+                promotion = switch (fastMove.pieceTypeToPromote) {
+                    case BoardState.INDEX_KNIGHT -> Piece.WHITE_KNIGHT;
+                    case BoardState.INDEX_BISHOP -> Piece.WHITE_BISHOP;
+                    case BoardState.INDEX_ROOK -> Piece.WHITE_ROOK;
+                    case BoardState.INDEX_QUEEN -> Piece.WHITE_QUEEN;
+                    default -> Piece.NONE;
+                };
+            } else {
+                promotion = switch (fastMove.pieceTypeToPromote) {
+                    case BoardState.INDEX_KNIGHT -> Piece.BLACK_KNIGHT;
+                    case BoardState.INDEX_BISHOP -> Piece.BLACK_BISHOP;
+                    case BoardState.INDEX_ROOK -> Piece.BLACK_ROOK;
+                    case BoardState.INDEX_QUEEN -> Piece.BLACK_QUEEN;
+                    default -> Piece.NONE;
+                };
+            }
         }
         
         return new Move(fromSquare, toSquare, promotion);

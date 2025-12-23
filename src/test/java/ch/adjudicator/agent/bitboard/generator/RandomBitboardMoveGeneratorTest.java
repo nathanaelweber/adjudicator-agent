@@ -4,6 +4,7 @@ import ch.adjudicator.agent.bitboard.adapter.ChessLibAdapter;
 import ch.adjudicator.agent.bitboard.model.BoardState;
 import ch.adjudicator.agent.bitboard.model.FastMove;
 import com.github.bhlangonijr.chesslib.Board;
+import com.github.bhlangonijr.chesslib.Side;
 import com.github.bhlangonijr.chesslib.move.Move;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
@@ -26,7 +27,7 @@ public class RandomBitboardMoveGeneratorTest {
 
             FastMove lastMove = null;
 
-            for (int i = 0; i < 40; i++) {
+            for (int i = 0; i < 200; i++) {
                 String fen = ChessLibAdapter.boardStateToFen(state);
                 LOGGER.info("Current fen={}", fen);
                 List<FastMove> fastMoves = BitboardMoveGenerator.generateMoves(state, lastMove);
@@ -36,7 +37,7 @@ public class RandomBitboardMoveGeneratorTest {
                     board.doMove(legalMoveExpected);
                     boolean foundLegalMove = false;
                     for(FastMove fastMove : fastMoves) {
-                        if(ChessLibAdapter.convertFastMoveToChessLibMove(fastMove).equals(legalMoveExpected)) {
+                        if(ChessLibAdapter.convertFastMoveToChessLibMove(fastMove, board.getSideToMove() == Side.WHITE).equals(legalMoveExpected)) {
                             foundLegalMove = true;
                             break;
                         }
@@ -47,10 +48,13 @@ public class RandomBitboardMoveGeneratorTest {
 
                 assertEquals(board.legalMoves().size(), fastMoves.size());
 
+                if(fastMoves.isEmpty()) {
+                    break;
+                }
                 FastMove fastMove = fastMoves.get(new Random().nextInt(fastMoves.size()));
                 state = state.applyMove(fastMove);
                 lastMove = fastMove;
-                board.doMove(ChessLibAdapter.convertFastMoveToChessLibMove(fastMove));
+                board.doMove(ChessLibAdapter.convertFastMoveToChessLibMove(fastMove, board.getSideToMove() == Side.WHITE));
             }
         }
     }
