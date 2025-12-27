@@ -37,7 +37,7 @@ public class RandomBitboardMoveGeneratorTest {
                     board.doMove(legalMoveExpected);
                     boolean foundLegalMove = false;
                     for(FastMove fastMove : fastMoves) {
-                        if(ChessLibAdapter.convertFastMoveToChessLibMove(fastMove, board.getSideToMove() == Side.WHITE).equals(legalMoveExpected)) {
+                        if(ChessLibAdapter.convertFastMoveToChessLibMove(fastMove, state.isWhiteToMove()).equals(legalMoveExpected)) {
                             foundLegalMove = true;
                             break;
                         }

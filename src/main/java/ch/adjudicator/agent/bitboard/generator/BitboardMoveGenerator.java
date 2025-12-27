@@ -760,24 +760,24 @@ public class BitboardMoveGenerator {
             
             // Castling
             // Kingside castling
-            if (boardState.isWhiteKingsideCastlingPossible() && from == 4) {
+            if (from == 4 && boardState.isWhiteKingsideCastlingPossible()) {
                 if ((boardState.allOccupied & 0x60L) == 0) { // f1 and g1 empty
-                    // Check that king is not in check and doesn't pass through check
-                    if (!isSquareAttackedByBlack(4, boardState) && 
-                        !isSquareAttackedByBlack(5, boardState) && 
-                        !isSquareAttackedByBlack(6, boardState)) {
+                    // Check that king is not in check and doesn't pass through check.
+                    // note: The check state on destination position will be tested anyway thus don't do that check here.
+                    if (!BitboardMoveGenerator.isKingInCheck(boardState, boardState.isWhiteToMove()) &&
+                        !isSquareAttackedByBlack(5, boardState)) {
                         addMove(moves, from, 6, false, false, true);
                     }
                 }
             }
             
             // Queenside castling
-            if (boardState.isWhiteQueensideCastlingPossible() && from == 4) {
+            if (from == 4 && boardState.isWhiteQueensideCastlingPossible()) {
                 if ((boardState.allOccupied & 0x0EL) == 0) { // b1, c1, d1 empty
                     // Check that king is not in check and doesn't pass through check
-                    if (!isSquareAttackedByBlack(4, boardState) && 
-                        !isSquareAttackedByBlack(3, boardState) && 
-                        !isSquareAttackedByBlack(2, boardState)) {
+                    // note: The check state on destination position will be tested anyway thus don't do that check here.
+                    if (!BitboardMoveGenerator.isKingInCheck(boardState, boardState.isWhiteToMove()) &&
+                        !isSquareAttackedByBlack(3, boardState)) {
                         addMove(moves, from, 2, false, false, true);
                     }
                 }
@@ -805,9 +805,9 @@ public class BitboardMoveGenerator {
             if (boardState.isBlackKingsideCastlingPossible() && from == 60) {
                 if ((boardState.allOccupied & 0x6000000000000000L) == 0) { // f8 and g8 empty
                     // Check that king is not in check and doesn't pass through check
-                    if (!isSquareAttackedByWhite(60, boardState) && 
-                        !isSquareAttackedByWhite(61, boardState) && 
-                        !isSquareAttackedByWhite(62, boardState)) {
+                    // note: The check state on destination position will be tested anyway thus don't do that check here.
+                    if (!BitboardMoveGenerator.isKingInCheck(boardState, boardState.isWhiteToMove()) &&
+                        !isSquareAttackedByWhite(61, boardState)) {
                         addMove(moves, from, 62, false, false, true);
                     }
                 }
@@ -817,9 +817,9 @@ public class BitboardMoveGenerator {
             if (boardState.isBlackQueensideCastlingPossible() && from == 60) {
                 if ((boardState.allOccupied & 0x0E00000000000000L) == 0) { // b8, c8, d8 empty
                     // Check that king is not in check and doesn't pass through check
-                    if (!isSquareAttackedByWhite(60, boardState) && 
-                        !isSquareAttackedByWhite(59, boardState) && 
-                        !isSquareAttackedByWhite(58, boardState)) {
+                    // note: The check state on destination position will be tested anyway thus don't do that check here.
+                    if (!BitboardMoveGenerator.isKingInCheck(boardState, boardState.isWhiteToMove()) &&
+                        !isSquareAttackedByWhite(59, boardState)) {
                         addMove(moves, from, 58, false, false, true);
                     }
                 }

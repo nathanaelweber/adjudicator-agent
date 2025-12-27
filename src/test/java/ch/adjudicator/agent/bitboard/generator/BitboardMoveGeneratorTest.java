@@ -378,4 +378,28 @@ class BitboardMoveGeneratorTest {
         }
         assertEquals(board.legalMoves().size(), fastMoves.size());
     }
+    @Test
+    void randomFailingMoves() {
+        String fen = "8/5k1P/p1r5/1p6/8/1pb4P/2r5/5K2 w - - 0 1";
+        BoardState state = ChessLibAdapter.fenToBoardState(fen);
+
+        List<FastMove> fastMoves = BitboardMoveGenerator.generateMoves(state, null);
+
+        Board board = new Board();
+        board.loadFromFen(fen);
+
+        for(Move legalMoveExpected : board.legalMoves()) {
+            board.doMove(legalMoveExpected);
+            boolean foundLegalMove = false;
+            for(FastMove fastMove : fastMoves) {
+                if(ChessLibAdapter.convertFastMoveToChessLibMove(fastMove, state.isWhiteToMove()).equals(legalMoveExpected)) {
+                    foundLegalMove = true;
+                    break;
+                }
+            }
+            assertTrue(foundLegalMove, "Move " + legalMoveExpected + " not found in generated moves. Board: " + board.getFen() + " actualFastMovesFound: " + fastMoves);
+            board.undoMove();
+        }
+        assertEquals(board.legalMoves().size(), fastMoves.size());
+    }
 }
