@@ -52,7 +52,9 @@ public class RandomBitboardMoveGeneratorTest {
                     break;
                 }
                 FastMove fastMove = fastMoves.get(new Random().nextInt(fastMoves.size()));
-                state = state.applyMove(fastMove);
+                BoardState next = new BoardState();
+                BoardState.applyMove(fastMove, state, next);
+                state = next;
                 lastMove = fastMove;
                 board.doMove(ChessLibAdapter.convertFastMoveToChessLibMove(fastMove, board.getSideToMove() == Side.WHITE));
             }

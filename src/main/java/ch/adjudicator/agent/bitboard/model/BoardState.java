@@ -1,5 +1,7 @@
 package ch.adjudicator.agent.bitboard.model;
 
+import com.github.bhlangonijr.chesslib.Board;
+
 public class BoardState {
     public long[] whitePieces = new long[6];
     public long[] blackPieces = new long[6];
@@ -38,30 +40,29 @@ public class BoardState {
     public static final long EN_PASSANT_SQUARE_MASK = 0x3FL; // using 6 bits thus the en passant square mask
     public static final long EN_PASSANT_CLEAR_MASK = 0x7F;
 
-    public BoardState applyMove(FastMove fastMove) {
-        BoardState newState = new BoardState();
-        
+    public static void applyMove(FastMove fastMove, BoardState fromState, BoardState newState) {
+
         // Copy piece bitboards
         for (int i = 0; i < 6; i++) {
-            newState.whitePieces[i] = this.whitePieces[i];
-            newState.blackPieces[i] = this.blackPieces[i];
+            newState.whitePieces[i] = fromState.whitePieces[i];
+            newState.blackPieces[i] = fromState.blackPieces[i];
         }
         
         // Copy auxiliary bits
-        newState.bitAuxiliaries = this.bitAuxiliaries;
+        newState.bitAuxiliaries = fromState.bitAuxiliaries;
         
         int from = fastMove.originSquare;
         int to = fastMove.destinationSquare;
         long fromBit = 1L << from;
         long toBit = 1L << to;
         
-        boolean isWhite = this.isWhiteToMove();
+        boolean isWhite = fromState.isWhiteToMove();
         
         // Find which piece is moving
         int pieceType = -1;
         if (isWhite) {
             for (int i = 0; i < 6; i++) {
-                if ((this.whitePieces[i] & fromBit) != 0) {
+                if ((fromState.whitePieces[i] & fromBit) != 0) {
                     pieceType = i;
                     break;
                 }
@@ -134,7 +135,7 @@ public class BoardState {
         } else {
             // Black's move
             for (int i = 0; i < 6; i++) {
-                if ((this.blackPieces[i] & fromBit) != 0) {
+                if ((fromState.blackPieces[i] & fromBit) != 0) {
                     pieceType = i;
                     break;
                 }
@@ -211,8 +212,6 @@ public class BoardState {
         
         // Update occupied bitboards
         newState.updateOccupiedFlags();
-        
-        return newState;
     }
 
     // Bitwise getters

@@ -24,7 +24,8 @@ class ApplyMoveTest {
         move.enPassant = false;
         move.castling = false;
         
-        BoardState newState = state.applyMove(move);
+        BoardState newState = new BoardState();
+BoardState.applyMove(move, state, newState);
         
         // Check pawn moved
         assertEquals(0, newState.whitePieces[BoardState.INDEX_PAWN] & (1L << 12), "Pawn should be removed from e2");
@@ -56,7 +57,8 @@ class ApplyMoveTest {
         move.enPassant = false;
         move.castling = false;
         
-        BoardState newState = state.applyMove(move);
+        BoardState newState = new BoardState();
+BoardState.applyMove(move, state, newState);
         
         // Check bishop moved
         assertEquals(0, newState.whitePieces[BoardState.INDEX_BISHOP] & (1L << 26));
@@ -84,7 +86,8 @@ class ApplyMoveTest {
         move.enPassant = false;
         move.castling = true;
         
-        BoardState newState = state.applyMove(move);
+        BoardState newState = new BoardState();
+        BoardState.applyMove(move, state, newState);
         
         // Check king moved to g1
         assertEquals(0, newState.whitePieces[BoardState.INDEX_KING] & (1L << 4));
@@ -118,7 +121,8 @@ class ApplyMoveTest {
         move.enPassant = false;
         move.castling = true;
         
-        BoardState newState = state.applyMove(move);
+        BoardState newState = new BoardState();
+BoardState.applyMove(move, state, newState);
         
         // Check king moved to c1
         assertNotEquals(0, newState.whitePieces[BoardState.INDEX_KING] & (1L << 2));
@@ -144,7 +148,8 @@ class ApplyMoveTest {
         move.enPassant = false;
         move.castling = true;
         
-        BoardState newState = state.applyMove(move);
+        BoardState newState = new BoardState();
+BoardState.applyMove(move, state, newState);
         
         // Check king moved to g8
         assertNotEquals(0, newState.blackPieces[BoardState.INDEX_KING] & (1L << 62));
@@ -173,7 +178,8 @@ class ApplyMoveTest {
         move.enPassant = false;
         move.castling = true;
         
-        BoardState newState = state.applyMove(move);
+        BoardState newState = new BoardState();
+BoardState.applyMove(move, state, newState);
         
         // Check king moved to c8
         assertNotEquals(0, newState.blackPieces[BoardState.INDEX_KING] & (1L << 58));
@@ -200,7 +206,8 @@ class ApplyMoveTest {
         move.enPassant = true;
         move.castling = false;
         
-        BoardState newState = state.applyMove(move);
+        BoardState newState = new BoardState();
+BoardState.applyMove(move, state, newState);
         
         // Check white pawn moved to d6
         assertNotEquals(0, newState.whitePieces[BoardState.INDEX_PAWN] & (1L << 43));
@@ -228,7 +235,8 @@ class ApplyMoveTest {
         move.enPassant = true;
         move.castling = false;
         
-        BoardState newState = state.applyMove(move);
+        BoardState newState = new BoardState();
+BoardState.applyMove(move, state, newState);
         
         // Check black pawn moved to e3
         assertNotEquals(0, newState.blackPieces[BoardState.INDEX_PAWN] & (1L << 20));
@@ -253,7 +261,8 @@ class ApplyMoveTest {
         move.castling = false;
         move.pieceTypeToPromote = BoardState.INDEX_QUEEN;
         
-        BoardState newState = state.applyMove(move);
+        BoardState newState = new BoardState();
+BoardState.applyMove(move, state, newState);
         
         // Check pawn removed from a7
         assertEquals(0, newState.whitePieces[BoardState.INDEX_PAWN] & (1L << 48));
@@ -278,7 +287,8 @@ class ApplyMoveTest {
         move.castling = false;
         move.pieceTypeToPromote = BoardState.INDEX_QUEEN;
         
-        BoardState newState = state.applyMove(move);
+        BoardState newState = new BoardState();
+BoardState.applyMove(move, state, newState);
         
         // Check pawn removed from a2
         assertEquals(0, newState.blackPieces[BoardState.INDEX_PAWN] & (1L << 8));
@@ -302,7 +312,8 @@ class ApplyMoveTest {
         move.enPassant = false;
         move.castling = false;
         
-        BoardState newState = state.applyMove(move);
+        BoardState newState = new BoardState();
+BoardState.applyMove(move, state, newState);
         
         // Check white castling rights cleared
         assertFalse(newState.isWhiteKingsideCastlingPossible());
@@ -326,7 +337,8 @@ class ApplyMoveTest {
         move.enPassant = false;
         move.castling = false;
         
-        BoardState newState = state.applyMove(move);
+        BoardState newState = new BoardState();
+BoardState.applyMove(move, state, newState);
         
         // Check only kingside castling cleared
         assertFalse(newState.isWhiteKingsideCastlingPossible());
@@ -346,7 +358,8 @@ class ApplyMoveTest {
         move.enPassant = false;
         move.castling = false;
         
-        BoardState newState = state.applyMove(move);
+        BoardState newState = new BoardState();
+BoardState.applyMove(move, state, newState);
         
         // Check black kingside castling cleared
         assertFalse(newState.isBlackKingsideCastlingPossible());
@@ -370,7 +383,8 @@ class ApplyMoveTest {
         move.enPassant = false;
         move.castling = false;
         
-        BoardState newState = state.applyMove(move);
+        BoardState newState = new BoardState();
+BoardState.applyMove(move, state, newState);
         
         // Check en passant square set to e3 (square 20)
         assertEquals(20, newState.getEnPassantSquare());
@@ -389,7 +403,8 @@ class ApplyMoveTest {
         move.enPassant = false;
         move.castling = false;
         
-        BoardState newState = state.applyMove(move);
+        BoardState newState = new BoardState();
+BoardState.applyMove(move, state, newState);
         
         // Check new en passant square is d6 (square 43)
         assertEquals(43, newState.getEnPassantSquare());
@@ -410,7 +425,8 @@ class ApplyMoveTest {
         move.enPassant = false;
         move.castling = false;
         
-        BoardState newState = state.applyMove(move);
+        BoardState newState = new BoardState();
+BoardState.applyMove(move, state, newState);
         
         // Check original state unchanged
         assertEquals(originalPawns, state.whitePieces[BoardState.INDEX_PAWN]);
@@ -431,7 +447,8 @@ class ApplyMoveTest {
         FastMove move1 = new FastMove();
         move1.originSquare = 12;
         move1.destinationSquare = 28;
-        BoardState state2 = state.applyMove(move1);
+        BoardState state2 = new BoardState();
+        BoardState.applyMove(move1, state, state2);
         
         assertFalse(state2.isWhiteToMove());
         assertEquals(20, state2.getEnPassantSquare());
@@ -440,7 +457,8 @@ class ApplyMoveTest {
         FastMove move2 = new FastMove();
         move2.originSquare = 52;
         move2.destinationSquare = 36;
-        BoardState state3 = state2.applyMove(move2);
+        BoardState state3 = new BoardState();
+        BoardState.applyMove(move2, state2, state3);
         
         assertTrue(state3.isWhiteToMove());
         assertEquals(44, state3.getEnPassantSquare());
@@ -449,7 +467,8 @@ class ApplyMoveTest {
         FastMove move3 = new FastMove();
         move3.originSquare = 6;
         move3.destinationSquare = 21;
-        BoardState state4 = state3.applyMove(move3);
+        BoardState state4 = new BoardState();
+        BoardState.applyMove(move3, state3, state4);
         
         assertFalse(state4.isWhiteToMove());
         assertEquals(-1, state4.getEnPassantSquare(), "En passant should be cleared after knight move");

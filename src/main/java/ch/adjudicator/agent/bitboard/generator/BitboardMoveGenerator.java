@@ -431,9 +431,10 @@ public class BitboardMoveGenerator {
         generateWhiteKingMoves(boardState, moves, lastMove);
 
         List<FastMove> validMoves = new ArrayList<>();
+        BoardState afterMove = new BoardState();
         for(FastMove move : moves) {
-            BoardState boardStateAfterMove = boardState.applyMove(move);
-            if(!isKingInCheck(boardStateAfterMove, boardState.isWhiteToMove())) {
+            BoardState.applyMove(move, boardState, afterMove);
+            if(!isKingInCheck(afterMove, boardState.isWhiteToMove())) {
                 validMoves.add(move);
             }
         }
@@ -452,9 +453,10 @@ public class BitboardMoveGenerator {
         generateBlackKingMoves(boardState, moves, lastMove);
 
         List<FastMove> validMoves = new ArrayList<>();
+        BoardState afterMove = new BoardState();
         for(FastMove move : moves) {
-            BoardState boardStateAfterMove = boardState.applyMove(move);
-            if(!isKingInCheck(boardStateAfterMove, boardState.isWhiteToMove())) {
+            BoardState.applyMove(move, boardState, afterMove);
+            if(!isKingInCheck(afterMove, boardState.isWhiteToMove())) {
                 validMoves.add(move);
             }
         }

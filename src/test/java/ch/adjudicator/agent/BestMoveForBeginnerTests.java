@@ -31,7 +31,7 @@ class BestMoveForBeginnerTests {
     void testKnightForkKingAndRook() throws Exception {
         // Knight fork: white knight can capture undefended rook
         Board board = new Board();
-        board.loadFromFen("8/r7/2k5/8/2N5/8/8/4K3 w - - 0 1");
+        board.loadFromFen("8/8/2k5/r7/2N5/8/8/4K3 w - - 0 1");
         
         Move bestMove = calculator.computeBestMove(board, 3000);
         
@@ -244,5 +244,18 @@ class BestMoveForBeginnerTests {
         assertNotNull(bestMove, "Should find counter-attack");
         assertEquals("D3C4", bestMove.toString().toUpperCase(),
                 "Queen should capture attacking bishop");
+    }
+
+    @Test
+    void avoidMateInOne() throws Exception {
+        // Black is winning, but white should try to defend as best as possible
+        Board board = new Board();
+        board.loadFromFen(
+                "1r2k3/1qp2pp1/3p1br1/4pn1p/8/2P4P/PPNP1P1K/R1B1RQ2 w - - 13 28");
+
+        Move bestMove = calculator.computeBestMove(board, 300000, 0,5);
+
+        assertEquals("F1H1", bestMove.toString().toUpperCase(),
+                "Queen defend mate in one");
     }
 }

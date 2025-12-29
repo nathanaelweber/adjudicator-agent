@@ -274,7 +274,7 @@ public class BestMoveCalculator {
      * and
      * https://www.chessprogramming.org/Alpha-Beta
      */
-    private ResultingScoreAndBounds alphaBeta(BoardState board, FastMove lastMove, int depth, int alpha, int beta, final boolean isMaximizingPlayer, Consumer<ResultingScoreAndBounds> bestMoveSink, long endTime, Consumer<AtomicBoolean> abortingSink, int ply) {
+    private ResultingScoreAndBounds alphaBeta(BoardState board, FastMove lastMove, int depth, int alpha, int beta, final boolean isMaximizingPlayer, long endTime, Consumer<AtomicBoolean> abortingSink, int ply) {
         if (collectDebugMoves) {
             if (debugMoveHistory.size() > 0) {
                 if (debugMoveHistory.getFirst().toString().toUpperCase().equals("F1E1")) {
@@ -346,14 +346,15 @@ public class BestMoveCalculator {
             int bestScore = -MATE_SCORE - 1000;
 
             for (FastMove nextMove : legalMoves) {
-                BoardState nextBoardState = board.applyMove(nextMove);
+                BoardState nextBoardState = new BoardState();
+                BoardState.applyMove(nextMove, board, nextBoardState);
                 if (collectDebugMoves) {
                     debugMoveHistory.add(nextMove);
                 }
 
                 positionHistory.add(nextBoardState);
 
-                int score = alphaBeta(nextBoardState, nextMove, depth - 1, alpha, beta, false, bestMoveSink, endTime, abortingSink, ply + 1).getScore();
+                int score = alphaBeta(nextBoardState, nextMove, depth - 1, alpha, beta, false, endTime, abortingSink, ply + 1).getScore();
 
                 positionHistory.removeLast();
                 if (collectDebugMoves) {
@@ -365,14 +366,6 @@ public class BestMoveCalculator {
 
                     if (score > alpha) {
                         alpha = score;
-
-                        bestMoveSink.accept(ResultingScoreAndBounds.builder() //TODO remove
-                                .score(bestScore)
-                                .alpha(alpha)
-                                .beta(beta)
-                                .ply(ply)
-                                .build());
-                        //LOGGER.info("Currently best move: {}", move);
                     }
                 }
 
@@ -413,7 +406,8 @@ public class BestMoveCalculator {
             int bestScore = MATE_SCORE + 1000;
 
             for (FastMove nextMove : legalMoves) {
-                BoardState nextBoardState = board.applyMove(nextMove);
+                BoardState nextBoardState = new BoardState();
+                BoardState.applyMove(nextMove, board, nextBoardState);
                 if (collectDebugMoves) {
                     debugMoveHistory.add(nextMove);
                 }
@@ -421,7 +415,7 @@ public class BestMoveCalculator {
                 positionHistory.add(nextBoardState);
 
 
-                int score = alphaBeta(nextBoardState, nextMove, depth - 1, alpha, beta, true, bestMoveSink, endTime, abortingSink, ply + 1).getScore();
+                int score = alphaBeta(nextBoardState, nextMove, depth - 1, alpha, beta, true, endTime, abortingSink, ply + 1).getScore();
 
                 positionHistory.removeLast();
                 if (collectDebugMoves) {
@@ -511,13 +505,6 @@ public class BestMoveCalculator {
 
             AtomicBoolean thisDepthIsAborted = new AtomicBoolean(false);
 
-            Consumer<ResultingScoreAndBounds> bestMoveSink = (ResultingScoreAndBounds bestMoveSoFar) -> {
-                if(collectDebugMoves) {
-                    LOGGER.info("BestMoveSoFar: score={} alpha={} beta={}",
-                            bestMoveSoFar.getScore(), bestMoveSoFar.getAlpha(), bestMoveSoFar.getBeta());
-                }
-            };
-
             Consumer<AtomicBoolean> abortingSink = (AtomicBoolean _isSearchAborted) -> {
                 LOGGER.info("Aborting search...");
                 thisDepthIsAborted.set(true);
@@ -533,7 +520,7 @@ public class BestMoveCalculator {
                 positionHistory.add(boardState);
 
                 scoreAndMoves.add(ScoreAndMove.builder()
-                        .score(alphaBeta(boardState, null, depth, alpha, beta, true, bestMoveSink, endTime, abortingSink, 0).negateScore())
+                        .score(alphaBeta(boardState, null, depth, alpha, beta, true, endTime, abortingSink, 0).negateScore())
                         .move(move)
                         .build());
 
