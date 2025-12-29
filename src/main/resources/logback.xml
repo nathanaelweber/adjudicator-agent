@@ -20,8 +20,8 @@
         </encoder>
     </appender>
 
-    <!-- Specific logger for BestMoveCalculator at DEBUG level -->
-    <logger name="ch.adjudicator.agent.BestMoveCalculator" level="DEBUG" />
+    <!-- Specific logger for package at DEBUG level -->
+    <logger name="ch.adjudicator.agent" level="DEBUG" />
 
     <!-- Root logger - log everything at INFO level -->
     <root level="INFO">
