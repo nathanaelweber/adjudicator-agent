@@ -323,11 +323,10 @@ public class BestMoveCalculator {
 
         // Base case: use quiescence search at leaf nodes
         if (depth <= 0) {
-            int score = ch.adjudicator.agent.bitboard.evaluation.SimpleBoardEvaluation.evaluate(board);
+            int score = quiescence(board, alpha, beta, ply);
             if(!isMaximizingPlayer) {
                 score = -score;
             }
-            //int score = quiescence(board, alpha, beta, ply);
             if (collectDebugMoves) {
                 if (debugMoveHistory.size() > 0) {
                     if (debugMoveHistory.getFirst().toString().toUpperCase().equals("F1E1")) {
@@ -455,6 +454,80 @@ public class BestMoveCalculator {
                     .ply(ply)
                     .build();
         }
+    }
+
+    /**
+     * Quiescence search: extends search in tactical positions (captures) to avoid horizon effect.
+     * Only considers captures to ensure the position is "quiet" before evaluating.
+     * 
+     * @param board Current board state
+     * @param alpha Alpha bound for alpha-beta pruning
+     * @param beta Beta bound for alpha-beta pruning
+     * @param ply Current ply from root
+     * @return Static evaluation score from current player's perspective
+     */
+    private int quiescence(BoardState board, int alpha, int beta, int ply) {
+        // Maximum quiescence depth to prevent excessive search
+        final int MAX_QUIESCENCE_DEPTH = 10;
+        
+        if (ply >= MAX_QUIESCENCE_DEPTH) {
+            // Reached max quiescence depth, return static evaluation
+            return ch.adjudicator.agent.bitboard.evaluation.SimpleBoardEvaluation.evaluate(board);
+        }
+        
+        // Stand-pat: evaluate current position
+        // If the position is already good enough to cause a beta cutoff, we can prune
+        int standPat = ch.adjudicator.agent.bitboard.evaluation.SimpleBoardEvaluation.evaluate(board);
+        
+        if (standPat >= beta) {
+            // Position is so good that opponent won't let us reach it
+            return beta;
+        }
+        
+        if (standPat > alpha) {
+            alpha = standPat;
+        }
+        
+        // Generate all legal moves
+        List<FastMove> allMoves = BitboardMoveGenerator.generateMoves(board, null);
+        
+        // Filter to only capture moves (and promotions, which are also tactical)
+        List<FastMove> tacticalMoves = new ArrayList<>();
+        boolean isWhite = board.isWhiteToMove();
+        long enemyOccupied = isWhite ? board.blackOccupied : board.whiteOccupied;
+        
+        for (FastMove move : allMoves) {
+            long destBit = 1L << move.destinationSquare;
+            // Include captures and promotions
+            if ((destBit & enemyOccupied) != 0 || move.promotion || move.enPassant) {
+                tacticalMoves.add(move);
+            }
+        }
+        
+        // If no tactical moves, return stand-pat score
+        if (tacticalMoves.isEmpty()) {
+            return standPat;
+        }
+        
+        // Search tactical moves
+        for (FastMove move : tacticalMoves) {
+            BoardState nextBoard = new BoardState();
+            BoardState.applyMove(move, board, nextBoard);
+            
+            // Recursively search this capture
+            int score = -quiescence(nextBoard, -beta, -alpha, ply + 1);
+            
+            if (score >= beta) {
+                // Beta cutoff
+                return beta;
+            }
+            
+            if (score > alpha) {
+                alpha = score;
+            }
+        }
+        
+        return alpha;
     }
 
     /**
