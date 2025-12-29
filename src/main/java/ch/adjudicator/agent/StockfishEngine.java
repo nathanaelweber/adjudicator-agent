@@ -18,6 +18,8 @@ import java.util.concurrent.TimeUnit;
 public class StockfishEngine {
     private static final Logger LOGGER = LoggerFactory.getLogger(StockfishEngine.class);
     private static final String STOCKFISH_PATH = "C:\\F\\projects\\devmtrail\\existing-chessbots\\stockfish\\stockfish-windows-x86-64-avx2.exe";
+    private static final int MIN_ELO = 1320;
+    private static final int MAX_ELO = 3190;
     
     private Process process;
     private OutputStreamWriter writer;
@@ -54,6 +56,24 @@ public class StockfishEngine {
         // Initialize UCI mode
         sendCommand("uci");
         waitForResponse("uciok", 5000);
+        
+        // Configure Elo limitation if STOCKFISH_ELO environment variable is set
+        String eloEnv = System.getenv("STOCKFISH_ELO");
+        if (eloEnv != null && !eloEnv.trim().isEmpty()) {
+            try {
+                int targetElo = Integer.parseInt(eloEnv.trim());
+                if (targetElo >= MIN_ELO && targetElo <= MAX_ELO) {
+                    sendCommand("setoption name UCI_LimitStrength value true");
+                    sendCommand(String.format("setoption name UCI_Elo value %d", targetElo));
+                    LOGGER.info("Stockfish Elo limited to: {}", targetElo);
+                } else {
+                    LOGGER.warn("STOCKFISH_ELO value {} is out of valid range [{}, {}], ignoring", 
+                                targetElo, MIN_ELO, MAX_ELO);
+                }
+            } catch (NumberFormatException e) {
+                LOGGER.warn("Invalid STOCKFISH_ELO value: {}, ignoring", eloEnv);
+            }
+        }
         
         // Check if engine is ready
         sendCommand("isready");

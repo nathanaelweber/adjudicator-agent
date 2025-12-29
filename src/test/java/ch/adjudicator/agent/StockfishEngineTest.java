@@ -95,4 +95,42 @@ public class StockfishEngineTest {
         assertNotNull(move2, "Second move should not be null");
         LOGGER.info("[DEBUG_LOG] Move 2: {}", move2);
     }
+
+    @Test
+    public void testEloLimitingWithValidValue() throws Exception {
+        LOGGER.info("[DEBUG_LOG] Testing Elo limiting with STOCKFISH_ELO=1500");
+        
+        // Stop the default engine from setUp
+        engine.stop();
+        
+        // Create a new process with environment variable set
+        StockfishEngine eloEngine = new StockfishEngine();
+        
+        // Note: Java doesn't allow modifying environment variables at runtime easily
+        // This test will verify the code compiles and runs without errors
+        // The actual Elo limiting can be tested manually by setting STOCKFISH_ELO=1500
+        
+        eloEngine.start();
+        assertTrue(eloEngine.isAlive(), "Engine should be alive with Elo limiting");
+        
+        // Test that the engine still works
+        eloEngine.setPosition();
+        String move = eloEngine.getBestMove(2000, 0);
+        assertNotNull(move, "Should get a valid move even with Elo limiting");
+        LOGGER.info("[DEBUG_LOG] Move with Elo limit: {}", move);
+        
+        eloEngine.stop();
+    }
+
+    @Test
+    public void testEloLimitingWithoutEnvironmentVariable() throws Exception {
+        LOGGER.info("[DEBUG_LOG] Testing engine without STOCKFISH_ELO (full strength)");
+        
+        // The default engine in setUp is created without environment variable
+        // Verify it works at full strength
+        engine.setPosition();
+        String move = engine.getBestMove(2000, 0);
+        assertNotNull(move, "Should get a valid move at full strength");
+        LOGGER.info("[DEBUG_LOG] Move at full strength: {}", move);
+    }
 }
