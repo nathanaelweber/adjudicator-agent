@@ -303,8 +303,9 @@ public class BestMoveCalculator {
                 // Checkmate - we are getting mated at this position
                 // Return mate score with distance = ply from root
                 int movesToMate = (ply + 1) / 2;
+                int sign = isMaximizingPlayer ? 1 : -1;
                 return ResultingScoreAndBounds.builder()
-                        .score(-MATE_SCORE + movesToMate)
+                        .score(sign*(-MATE_SCORE + movesToMate))
                         .alpha(alpha)
                         .beta(beta)
                         .ply(ply)
