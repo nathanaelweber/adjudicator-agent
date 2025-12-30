@@ -477,15 +477,15 @@ public class BestMoveCalculator {
         
         // Stand-pat: evaluate current position
         // If the position is already good enough to cause a beta cutoff, we can prune
-        int standPat = ch.adjudicator.agent.bitboard.evaluation.SimpleBoardEvaluation.evaluate(board);
+        int bestValue = ch.adjudicator.agent.bitboard.evaluation.SimpleBoardEvaluation.evaluate(board);
         
-        if (standPat >= beta) {
+        if (bestValue >= beta) {
             // Position is so good that opponent won't let us reach it
-            return beta;
+            return bestValue;
         }
         
-        if (standPat > alpha) {
-            alpha = standPat;
+        if (bestValue > alpha) {
+            alpha = bestValue;
         }
         
         // Generate all legal moves
@@ -506,7 +506,7 @@ public class BestMoveCalculator {
         
         // If no tactical moves, return stand-pat score
         if (tacticalMoves.isEmpty()) {
-            return standPat;
+            return bestValue;
         }
         
         // Search tactical moves
@@ -519,7 +519,10 @@ public class BestMoveCalculator {
             
             if (score >= beta) {
                 // Beta cutoff
-                return beta;
+                return score;
+            }
+            if(score > bestValue) {
+                bestValue = score;
             }
             
             if (score > alpha) {
@@ -527,7 +530,7 @@ public class BestMoveCalculator {
             }
         }
         
-        return alpha;
+        return bestValue;
     }
 
     /**
