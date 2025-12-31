@@ -1,6 +1,7 @@
 package ch.adjudicator.agent;
 
 import ch.adjudicator.agent.bitboard.adapter.ChessLibAdapter;
+import ch.adjudicator.agent.bitboard.evaluation.PestoBoardEvaluation;
 import ch.adjudicator.agent.bitboard.generator.BitboardMoveGenerator;
 import ch.adjudicator.agent.bitboard.model.BoardState;
 import ch.adjudicator.agent.bitboard.model.FastMove;
@@ -12,7 +13,6 @@ import ch.adjudicator.agent.positionevaluation.ZobristHash;
 import ch.adjudicator.client.GameInfo;
 import com.github.bhlangonijr.chesslib.Board;
 import com.github.bhlangonijr.chesslib.Piece;
-import com.github.bhlangonijr.chesslib.Side;
 import com.github.bhlangonijr.chesslib.Square;
 import com.github.bhlangonijr.chesslib.move.Move;
 import org.slf4j.Logger;
@@ -507,12 +507,12 @@ public class BestMoveCalculator {
         
         if (ply >= MAX_QUIESCENCE_DEPTH) {
             // Reached max quiescence depth, return static evaluation
-            return ch.adjudicator.agent.bitboard.evaluation.SimpleBoardEvaluation.evaluate(board);
+            return PestoBoardEvaluation.evaluate(board);
         }
         
         // Stand-pat: evaluate current position
         // If the position is already good enough to cause a beta cutoff, we can prune
-        int bestValue = ch.adjudicator.agent.bitboard.evaluation.SimpleBoardEvaluation.evaluate(board);
+        int bestValue = PestoBoardEvaluation.evaluate(board);
         
         if (bestValue >= beta) {
             // Position is so good that opponent won't let us reach it

@@ -1,8 +1,9 @@
 package ch.adjudicator.agent.bitboard.generator;
 
+import ch.adjudicator.agent.bitboard.evaluation.PestoBoardEvaluation;
+import ch.adjudicator.agent.bitboard.evaluation.SimpleBoardEvaluation;
 import ch.adjudicator.agent.bitboard.model.BoardState;
 import ch.adjudicator.agent.bitboard.model.FastMove;
-import ch.adjudicator.agent.positionevaluation.SimpleBoardEvaluation;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -436,7 +437,7 @@ public class BitboardMoveGenerator {
         for(FastMove move : moves) {
             BoardState.applyMove(move, boardState, afterMove);
             if(!isKingInCheck(afterMove, boardState.isWhiteToMove())) {
-                move.score =  ch.adjudicator.agent.bitboard.evaluation.SimpleBoardEvaluation.evaluate(afterMove);
+                move.score =  PestoBoardEvaluation.evaluate(afterMove);
                 validMoves.add(move);
             }
         }

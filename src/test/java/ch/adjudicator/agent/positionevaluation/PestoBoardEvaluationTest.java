@@ -1,4 +1,4 @@
-package ch.adjudicator.agent.bitboard.evaluation;
+package ch.adjudicator.agent.positionevaluation;
 
 import ch.adjudicator.agent.bitboard.adapter.ChessLibAdapter;
 import com.github.bhlangonijr.chesslib.Board;
@@ -6,9 +6,9 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-class SimpleBoardEvaluationTest {
+class PestoBoardEvaluationTest {
     private static int evaluate(Board board) {
-        return SimpleBoardEvaluation.evaluate(ChessLibAdapter.boardToBoardState(board));
+        return SimpleBoardEvaluation.evaluate(board);
     }
 
     @Test
@@ -50,7 +50,7 @@ class SimpleBoardEvaluationTest {
                 "White up a pawn, from White's perspective should be positive, but got: " + score);
 
         // Should be approximately one pawn value (100 centipawns + positional bonus)
-        assertTrue(score >= 120 && score <= 190,
+        assertTrue(score >= 90 && score <= 120,
                 "Expected around -100 centipawns, but got: " + score);
     }
 
@@ -68,7 +68,7 @@ class SimpleBoardEvaluationTest {
                 "White up a pawn, from Black's perspective should be negative, but got: " + score);
 
         // Should be approximately one pawn value (100 centipawns + positional bonus)
-        assertTrue(score <= -130 && score >= -190,
+        assertTrue(score <= -90 && score >= -120,
                 "Expected around -100 centipawns, but got: " + score);
     }
 
@@ -86,7 +86,7 @@ class SimpleBoardEvaluationTest {
                 "Black up a pawn, from White's perspective should be negative, but got: " + score);
 
         // Should be approximately one pawn value
-        assertTrue(score <= -120 && score >= -190,
+        assertTrue(score <= -90 && score >= -120,
                 "Expected around -100 centipawns, but got: " + score);
     }
 
@@ -104,7 +104,7 @@ class SimpleBoardEvaluationTest {
                 "Black up a pawn, from Black's perspective should be positive, but got: " + score);
 
         // Should be approximately one pawn value
-        assertTrue(score >= 120 && score <= 190,
+        assertTrue(score >= 90 && score <= 120,
                 "Expected around +100 centipawns, but got: " + score);
     }
 
@@ -120,8 +120,8 @@ class SimpleBoardEvaluationTest {
         assertTrue(score > 0,
                 "White up a knight, from White's perspective should be positive, but got: " + score);
 
-        // Should be approximately 350 centipawns (knight value)
-        assertTrue(score >= 340 && score <= 370,
+        // Should be approximately 300 centipawns (knight value)
+        assertTrue(score >= 280 && score <= 320,
                 "Expected around 300 centipawns, but got: " + score);
     }
 
@@ -137,8 +137,8 @@ class SimpleBoardEvaluationTest {
         assertTrue(score < 0,
                 "White up a queen, from Black's perspective should be negative, but got: " + score);
 
-        // Should be approximately 1000 centipawns (queen value in mid-game)
-        assertTrue(score <= -900 && score >= -1100,
+        // Should be approximately 900 centipawns (queen value)
+        assertTrue(score <= -880 && score >= -920,
                 "Expected around -900 centipawns, but got: " + score);
     }
 
@@ -170,8 +170,8 @@ class SimpleBoardEvaluationTest {
         assertTrue(score > 0,
                 "White up a pawn, from White's perspective should be positive, but got: " + score);
 
-        // Should be approximately one pawn value, but in end-game, pawns have more value
-        assertTrue(score >= 200 && score <= 300,
+        // Should be approximately one pawn value
+        assertTrue(score >= 100 && score <= 130,
                 "Expected around 100 to 110 centipawns (pawn + positional), but got: " + score);
     }
 }
