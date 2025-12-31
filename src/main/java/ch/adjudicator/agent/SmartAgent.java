@@ -151,7 +151,7 @@ public class SmartAgent implements Agent {
 
 
     // =============== Main launcher (optional) ==================
-    public static void main(String[] args) {
+    public static void main(String[] args) throws InterruptedException {
         while (true) {
             AgentConfiguration config = new AgentConfiguration(args);
             try {
@@ -180,6 +180,8 @@ public class SmartAgent implements Agent {
                 LOGGER.error("Game error", e);
                 System.exit(1);
             }
+
+            Thread.sleep(5000);
         }
     }
 }

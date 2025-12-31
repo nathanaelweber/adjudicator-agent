@@ -1,5 +1,6 @@
 package ch.adjudicator.client;
 
+import ch.adjudicator.agent.SmartAgent;
 import chess_contest.ChessContest;
 import chess_contest.ChessGameGrpc;
 import io.grpc.ManagedChannel;
@@ -7,6 +8,8 @@ import io.grpc.ManagedChannelBuilder;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import io.grpc.stub.StreamObserver;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -22,6 +25,8 @@ public class AdjudicatorClient {
     private final String serverAddress;
     private final String apiKey;
     private final boolean useTls;
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(AdjudicatorClient.class);
 
     /**
      * Create a new Adjudicator client.
@@ -65,6 +70,7 @@ public class AdjudicatorClient {
 
             // Latch to wait for game completion
             CountDownLatch finishLatch = new CountDownLatch(1);
+            CountDownLatch startLatch = new CountDownLatch(1);
             AtomicReference<StreamObserver<ChessContest.ClientToServerMessage>> requestObserver = new AtomicReference<>();
             // Create response observer
             requestObserver.set(stub.playGame(
@@ -83,6 +89,7 @@ public class AdjudicatorClient {
                                                 message.getGameStarted().getInitialTimeMs(),
                                                 message.getGameStarted().getIncrementMs()
                                         ));
+                                        startLatch.countDown();
                                         break;
 
                                     case MOVE_REQUEST:
@@ -175,6 +182,14 @@ public class AdjudicatorClient {
                     .setJoinRequest(joinRequest)
                     .build());
 
+            // Wait for game to start
+            boolean startingTimedOut = startLatch.await(30, TimeUnit.SECONDS);
+            if(startingTimedOut) {
+                LOGGER.warn("Game match-making timed out after 30 seconds");
+                channel.shutdown();
+                channel.awaitTermination(5, TimeUnit.SECONDS);
+                return;
+            }
             // Wait for game to complete
             finishLatch.await();
 
