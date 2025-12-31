@@ -13,4 +13,5 @@ import lombok.NoArgsConstructor;
 public class ScoreAndMove {
     ResultingScoreAndBounds score;
     Move move;
+    int depth;
 }

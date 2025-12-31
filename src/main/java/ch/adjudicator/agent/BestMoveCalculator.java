@@ -604,6 +604,8 @@ public class BestMoveCalculator {
         long startTime = fastClockSource.getTimeMs();
         int bestScore = -MATE_SCORE - 1000;
 
+        Map<Move, ScoreAndMove> scoreAndMoves = new HashMap<>();
+
         // Iterative deepening
         for (int depth = minDepth; depth <= maxDepth; depth++) {
             long endTime = startTime + budgetMs;
@@ -622,8 +624,6 @@ public class BestMoveCalculator {
                 thisDepthIsAborted.set(true);
             };
 
-            List<ScoreAndMove> scoreAndMoves = new ArrayList<>();
-
             for (Move move : legalMoves) {
 
                 board.doMove(move);
@@ -631,10 +631,14 @@ public class BestMoveCalculator {
                 BoardState boardState = ChessLibAdapter.fenToBoardState(board.getFen());
                 positionHistory.add(boardState);
 
-                scoreAndMoves.add(ScoreAndMove.builder()
-                        .score(alphaBeta(boardState, null, depth, alpha, beta, true, endTime, abortingSink, 0).negateScore())
-                        .move(move)
-                        .build());
+                ResultingScoreAndBounds resultingScoreAndBounds = alphaBeta(boardState, null, depth, alpha, beta, true, endTime, abortingSink, 0).negateScore();
+                if(!thisDepthIsAborted.get()) {
+                    scoreAndMoves.put(move, ScoreAndMove.builder()
+                            .score(resultingScoreAndBounds)
+                            .move(move)
+                            .depth(depth)
+                            .build());
+                }
 
                 positionHistory.removeLast();
                 if (collectDebugMoves) {
@@ -652,7 +656,7 @@ public class BestMoveCalculator {
                 break;
             }
 
-            var bestMoveWithinResults = searchForBestMoveWithinScores(scoreAndMoves);
+            var bestMoveWithinResults = searchForBestMoveWithinScores(scoreAndMoves.values());
             if (bestMoveWithinResults != null) {
                 bestMove = bestMoveWithinResults.getMove();
                 bestScore = bestMoveWithinResults.getScore().getScore();
@@ -680,9 +684,13 @@ public class BestMoveCalculator {
         return bestMove;
     }
 
-    private ScoreAndMove searchForBestMoveWithinScores(List<ScoreAndMove> scores) {
-        ScoreAndMove bestMoveSoFar = scores.getFirst();
+    private ScoreAndMove searchForBestMoveWithinScores(Collection<ScoreAndMove> scores) {
+        ScoreAndMove bestMoveSoFar = null;
         for (ScoreAndMove score : scores) {
+            if (bestMoveSoFar == null) {
+                bestMoveSoFar = score;
+            }
+
             if (score.getScore().getScore() > bestMoveSoFar.getScore().getScore()) {
                 bestMoveSoFar = score;
             }
