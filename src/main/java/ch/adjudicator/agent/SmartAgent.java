@@ -1,6 +1,7 @@
 package ch.adjudicator.agent;
 
 import ch.adjudicator.agent.bitboard.adapter.ChessLibAdapter;
+import ch.adjudicator.agent.clock.FastClockSource;
 import ch.adjudicator.client.*;
 import com.github.bhlangonijr.chesslib.Board;
 import com.github.bhlangonijr.chesslib.move.Move;
@@ -25,11 +26,12 @@ public class SmartAgent implements Agent {
     private Board board = new Board();
     private final Random random;
 
-    BestMoveCalculator bestMoveCalculator = new BestMoveCalculator();
+    BestMoveCalculator bestMoveCalculator;
 
-    public SmartAgent(String name) {
+    public SmartAgent(String name, FastClockSource fastClockSource) {
         this.name = name;
         this.random = new Random();
+        this.bestMoveCalculator = new BestMoveCalculator(fastClockSource);
     }
 
 
@@ -152,6 +154,7 @@ public class SmartAgent implements Agent {
 
     // =============== Main launcher (optional) ==================
     public static void main(String[] args) throws InterruptedException {
+        FastClockSource fastClockSource = new FastClockSource();
         while (true) {
             AgentConfiguration config = new AgentConfiguration(args);
             try {
@@ -172,7 +175,7 @@ public class SmartAgent implements Agent {
 
             LOGGER.info("Starting {} (SmartAgent)...", config.getAgentName());
             AdjudicatorClient client = new AdjudicatorClient(config.getServerAddress(), config.getApiKey(), true);
-            SmartAgent agent = new SmartAgent(config.getAgentName());
+            SmartAgent agent = new SmartAgent(config.getAgentName(), fastClockSource);
             try {
                 client.playGame(agent, mode, config.getTimeControl());
                 LOGGER.info("SmartAgent finished successfully");

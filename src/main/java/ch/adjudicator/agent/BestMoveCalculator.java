@@ -4,6 +4,7 @@ import ch.adjudicator.agent.bitboard.adapter.ChessLibAdapter;
 import ch.adjudicator.agent.bitboard.generator.BitboardMoveGenerator;
 import ch.adjudicator.agent.bitboard.model.BoardState;
 import ch.adjudicator.agent.bitboard.model.FastMove;
+import ch.adjudicator.agent.clock.FastClockSource;
 import ch.adjudicator.agent.positionevaluation.ResultingScoreAndBounds;
 import ch.adjudicator.agent.positionevaluation.ScoreAndMove;
 import ch.adjudicator.agent.positionevaluation.SimpleBoardEvaluation;
@@ -61,9 +62,40 @@ public class BestMoveCalculator {
     // Game control
     private int incrementMs = 0;
     private String name = "BestMoveCalculator";
+    private FastClockSource fastClockSource;
 
+    public BestMoveCalculator(FastClockSource fastClockSource) {
+        this.fastClockSource = fastClockSource;
+        // Initialize Transposition Table
+        transpositionTable = new TranspositionTableEntry[TT_SIZE];
+        for (int i = 0; i < TT_SIZE; i++) {
+            transpositionTable[i] = new TranspositionTableEntry();
+        }
+
+        // Initialize Zobrist hashing
+        zobristHash = new ZobristHash();
+
+        // Initialize position history for repetition detection
+        positionHistory = new ArrayList<>();
+
+        debugMoveHistory = new ArrayList<>();
+
+        // Try to load opening book from docs directory
+        try {
+            Path bookPath = Paths.get("docs", "Perfect_2021", "BIN", "Perfect2021.bin");
+            if (bookPath.toFile().exists()) {
+                openingBook = new OpeningBook(bookPath);
+                LOGGER.info("Opening book loaded successfully from {}", bookPath);
+            } else {
+                LOGGER.warn("Opening book not found at {}, will play without book", bookPath);
+            }
+        } catch (Exception e) {
+            LOGGER.warn("Failed to load opening book, will play without book", e);
+        }
+    }
 
     public BestMoveCalculator() {
+        fastClockSource = new FastClockSource();
         // Initialize Transposition Table
         transpositionTable = new TranspositionTableEntry[TT_SIZE];
         for (int i = 0; i < TT_SIZE; i++) {
@@ -125,7 +157,6 @@ public class BestMoveCalculator {
                 // Low time aggression: cap to 1-2 shallow iterations
                 budgetMs = Math.min(budgetMs, 150L);
             }
-            long startTime = System.currentTimeMillis();
 
             LOGGER.info("[{}] Starting search with budget {}ms", name, budgetMs);
 
@@ -373,7 +404,7 @@ public class BestMoveCalculator {
                     }
                 }
 
-                long elapsed = System.currentTimeMillis() - endTime;
+                long elapsed = fastClockSource.getTimeMs() - endTime;
                 if (elapsed >= 0) {
                     abortingSink.accept(new AtomicBoolean(true));
                     return ResultingScoreAndBounds.builder()
@@ -570,13 +601,13 @@ public class BestMoveCalculator {
         });
 
         Move bestMove = legalMoves.getFirst();
-        long startTime = System.currentTimeMillis();
+        long startTime = fastClockSource.getTimeMs();
         int bestScore = -MATE_SCORE - 1000;
 
         // Iterative deepening
         for (int depth = minDepth; depth <= maxDepth; depth++) {
             long endTime = startTime + budgetMs;
-            long elapsed = System.currentTimeMillis() - startTime;
+            long elapsed = fastClockSource.getTimeMs() - startTime;
             if (elapsed >= budgetMs) {
                 break;
             }
@@ -640,7 +671,7 @@ public class BestMoveCalculator {
             }
 
             // Stop if time is up
-            elapsed = System.currentTimeMillis() - startTime;
+            elapsed = fastClockSource.getTimeMs() - startTime;
             if (elapsed >= budgetMs) {
                 break;
             }

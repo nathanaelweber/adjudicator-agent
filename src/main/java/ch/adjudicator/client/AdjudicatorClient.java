@@ -188,7 +188,6 @@ public class AdjudicatorClient {
                 LOGGER.warn("Game match-making timed out after 30 seconds");
                 channel.shutdown();
                 channel.awaitTermination(5, TimeUnit.SECONDS);
-                return;
             }
             // Wait for game to complete
             finishLatch.await();

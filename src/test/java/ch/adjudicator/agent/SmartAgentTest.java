@@ -1,5 +1,6 @@
 package ch.adjudicator.agent;
 
+import ch.adjudicator.agent.clock.FastClockSource;
 import ch.adjudicator.client.Color;
 import ch.adjudicator.client.GameInfo;
 import ch.adjudicator.client.MoveRequest;
@@ -19,7 +20,7 @@ class SmartAgentTest {
 
     @BeforeEach
     void setUp() {
-        agent = new SmartAgent("TestSmartBot");
+        agent = new SmartAgent("TestSmartBot", new FastClockSource());
         testBoard = new Board();
     }
 
@@ -91,7 +92,7 @@ class SmartAgentTest {
         
         // Need to manually set up the agent's internal board to this position
         // Since we can't directly access it, we'll create a new agent for this specific test
-        SmartAgent promotionAgent = new SmartAgent("PromotionBot");
+        SmartAgent promotionAgent = new SmartAgent("PromotionBot", new FastClockSource());
         promotionAgent.onGameStart(new GameInfo("test-game", Color.WHITE, 300000, 0));
         
         // Apply moves to reach promotion position (complex, so we'll use a simpler approach)
@@ -316,7 +317,7 @@ class SmartAgentTest {
         
         // Play 5 games and collect first moves
         for (int i = 0; i < 5; i++) {
-            SmartAgent testAgent = new SmartAgent("DiversityTest" + i);
+            SmartAgent testAgent = new SmartAgent("DiversityTest" + i, new FastClockSource());
             testAgent.onGameStart(new GameInfo("game" + i, Color.WHITE, 300000, 0));
             MoveRequest request = new MoveRequest("", 300000, 300000);
             String move = testAgent.getMove(request);
