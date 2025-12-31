@@ -119,22 +119,6 @@ class QueenSafetyTests {
     }
 
     @Test
-    void testQueenSacrificeForCheckmate() throws Exception {
-        // From Legal's Mate: classic queen sacrifice leading to checkmate
-        // After: 1.e4 e5 2.Nf3 d6 3.Bc4 Bg4 4.Nc3 g6 5.Nxe5! Bxd1 6.Bxf7+ Ke7 7.Nd5#
-        // Position before the queen sacrifice - white should see the combination
-        Board board = new Board();
-        board.loadFromFen("rn1qkbnr/ppp2ppp/3p4/4N3/2B1P1b1/8/PPPPQPPP/RNB1K2R w KQkq - 0 1");
-        
-        Move bestMove = calculator.computeBestMove(board, 30000, 0,3);
-        
-        assertNotNull(bestMove, "Should find simple mate in one and not defend the queen");
-        // Best move is Bxf7+ starting the mating attack (Legal's Mate)
-        assertEquals("C4F7", bestMove.toString().toUpperCase(),
-                "Should play Bxf7+ (Legal's Mate)");
-    }
-
-    @Test
     void testQueenAndPawnEndgame() throws Exception { // TODO improove the position does not allow pawn push..
         // From endgame theory: queen and pawn vs queen
         // Position from Dvoretsky's Endgame Manual

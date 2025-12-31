@@ -11,6 +11,7 @@ import ch.adjudicator.agent.positionevaluation.ZobristHash;
 import ch.adjudicator.client.GameInfo;
 import com.github.bhlangonijr.chesslib.Board;
 import com.github.bhlangonijr.chesslib.Piece;
+import com.github.bhlangonijr.chesslib.Side;
 import com.github.bhlangonijr.chesslib.Square;
 import com.github.bhlangonijr.chesslib.move.Move;
 import org.slf4j.Logger;
@@ -342,6 +343,9 @@ public class BestMoveCalculator {
                     .build();
         }
 
+
+        legalMoves.sort(Collections.reverseOrder((a, b) -> Integer.compare(b.score, a.score)));
+
         if (isMaximizingPlayer) {
             int bestScore = -MATE_SCORE - 1000;
 
@@ -617,13 +621,13 @@ public class BestMoveCalculator {
                 break;
             }
 
-            LOGGER.debug("Finished search for this depth={}", depth);
-
             var bestMoveWithinResults = searchForBestMoveWithinScores(scoreAndMoves);
             if (bestMoveWithinResults != null) {
                 bestMove = bestMoveWithinResults.getMove();
                 bestScore = bestMoveWithinResults.getScore().getScore();
             }
+
+            LOGGER.debug("Finished search for this depth={} bestMoveSoFar={} best scoreSoFar={}", depth, bestMove.toString().toLowerCase(), bestScore);
 
             // If we found a mate in 1, no need to search deeper
             // Mate in 1 means score is close to MATE_SCORE (within MAX_MATE_DISTANCE)

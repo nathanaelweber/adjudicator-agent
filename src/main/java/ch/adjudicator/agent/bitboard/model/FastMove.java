@@ -14,4 +14,5 @@ public class FastMove {
     public boolean promotion;
     public boolean enPassant;
     public boolean castling;
+    public int score;
 }
