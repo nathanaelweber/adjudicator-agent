@@ -150,77 +150,58 @@ public class BitboardMoveGenerator {
      */
     public static boolean isKingInCheck(BoardState boardState, boolean isKingOfFocusWhite) {
         final long kingBitboard = isKingOfFocusWhite ? boardState.whitePieces[BoardState.INDEX_KING] : boardState.blackPieces[BoardState.INDEX_KING];
-
         if (kingBitboard == 0) {
             return false; // No king (shouldn't happen in valid position)
         }
 
-        if(isKingOfFocusWhite) {
-            if(0 != (BitboardGenerator.getBlackPawnCaptureLeft(boardState.blackPieces[BoardState.INDEX_PAWN], boardState.whiteOccupied) & kingBitboard)) {
+        final int kingSquare = Long.numberOfTrailingZeros(kingBitboard);
+        final long allOcc = boardState.allOccupied;
+
+        if (isKingOfFocusWhite) {
+            // Pawn attacks (black pawns attacking white king)
+            if ((BitboardGenerator.getBlackPawnCaptureLeft(boardState.blackPieces[BoardState.INDEX_PAWN], boardState.whiteOccupied) & kingBitboard) != 0) {
                 return true;
             }
-            if(0 != (BitboardGenerator.getBlackPawnCaptureRight(boardState.blackPieces[BoardState.INDEX_PAWN], boardState.whiteOccupied) & kingBitboard)) {
+            if ((BitboardGenerator.getBlackPawnCaptureRight(boardState.blackPieces[BoardState.INDEX_PAWN], boardState.whiteOccupied) & kingBitboard) != 0) {
                 return true;
             }
-
-            for (int square = 0; square < 64; square++) {
-                long squareBitboard = 1L << square;
-
-                if(0 != (boardState.blackPieces[BoardState.INDEX_KNIGHT] & squareBitboard)) {
-                    if(0 != (BitboardGenerator.KNIGHT_ATTACKS[square] & kingBitboard)) {
-                        return true;
-                    }
-                }
-                if((0 != (boardState.blackPieces[BoardState.INDEX_BISHOP] & squareBitboard)) || (0 != (boardState.blackPieces[BoardState.INDEX_QUEEN] & squareBitboard))) {
-                    if(0 != (BitboardGenerator.getBishopAttacks(square, boardState.allOccupied) & kingBitboard)) {
-                        return true;
-                    }
-                }
-                if((0 != (boardState.blackPieces[BoardState.INDEX_ROOK] & squareBitboard)) || (0 != (boardState.blackPieces[BoardState.INDEX_QUEEN] & squareBitboard))) {
-                    if(0 != (BitboardGenerator.getRookAttacks(square, boardState.allOccupied) & kingBitboard)) {
-                        return true;
-                    }
-                }
-                if((0 != (boardState.blackPieces[BoardState.INDEX_KING] & squareBitboard)) ) {
-                    if(0 != (BitboardGenerator.KING_ATTACKS[square] & kingBitboard)) {
-                        return true;
-                    }
-                }
+            // Knight attacks
+            if ((BitboardGenerator.KNIGHT_ATTACKS[kingSquare] & boardState.blackPieces[BoardState.INDEX_KNIGHT]) != 0) {
+                return true;
             }
+            // Bishop/Queen diagonal attacks
+            if ((BitboardGenerator.getBishopAttacks(kingSquare, allOcc) & (boardState.blackPieces[BoardState.INDEX_BISHOP] | boardState.blackPieces[BoardState.INDEX_QUEEN])) != 0) {
+                return true;
+            }
+            // Rook/Queen straight attacks
+            if ((BitboardGenerator.getRookAttacks(kingSquare, allOcc) & (boardState.blackPieces[BoardState.INDEX_ROOK] | boardState.blackPieces[BoardState.INDEX_QUEEN])) != 0) {
+                return true;
+            }
+            // King adjacency
+            return (BitboardGenerator.KING_ATTACKS[kingSquare] & boardState.blackPieces[BoardState.INDEX_KING]) != 0;
         } else {
-            if(0 != (BitboardGenerator.getWhitePawnCaptureLeft(boardState.whitePieces[BoardState.INDEX_PAWN], boardState.blackOccupied) & kingBitboard)) {
+            // Pawn attacks (white pawns attacking black king)
+            if ((BitboardGenerator.getWhitePawnCaptureLeft(boardState.whitePieces[BoardState.INDEX_PAWN], boardState.blackOccupied) & kingBitboard) != 0) {
                 return true;
             }
-            if(0 != (BitboardGenerator.getWhitePawnCaptureRight(boardState.whitePieces[BoardState.INDEX_PAWN], boardState.blackOccupied) & kingBitboard)) {
+            if ((BitboardGenerator.getWhitePawnCaptureRight(boardState.whitePieces[BoardState.INDEX_PAWN], boardState.blackOccupied) & kingBitboard) != 0) {
                 return true;
             }
-
-            for (int square = 0; square < 64; square++) {
-                long squareBitboard = 1L << square;
-
-                if(0 != (boardState.whitePieces[BoardState.INDEX_KNIGHT] & squareBitboard)) {
-                    if(0 != (BitboardGenerator.KNIGHT_ATTACKS[square] & kingBitboard)) {
-                        return true;
-                    }
-                }
-                if((0 != (boardState.whitePieces[BoardState.INDEX_BISHOP] & squareBitboard)) || (0 != (boardState.whitePieces[BoardState.INDEX_QUEEN] & squareBitboard))) {
-                    if(0 != (BitboardGenerator.getBishopAttacks(square, boardState.allOccupied) & kingBitboard)) {
-                        return true;
-                    }
-                }
-                if((0 != (boardState.whitePieces[BoardState.INDEX_ROOK] & squareBitboard)) || (0 != (boardState.whitePieces[BoardState.INDEX_QUEEN] & squareBitboard))) {
-                    if(0 != (BitboardGenerator.getRookAttacks(square, boardState.allOccupied) & kingBitboard)) {
-                        return true;
-                    }
-                }
-                if((0 != (boardState.whitePieces[BoardState.INDEX_KING] & squareBitboard)) ) {
-                    if(0 != (BitboardGenerator.KING_ATTACKS[square] & kingBitboard)) {
-                        return true;
-                    }
-                }
+            // Knight attacks
+            if ((BitboardGenerator.KNIGHT_ATTACKS[kingSquare] & boardState.whitePieces[BoardState.INDEX_KNIGHT]) != 0) {
+                return true;
             }
+            // Bishop/Queen diagonal attacks
+            if ((BitboardGenerator.getBishopAttacks(kingSquare, allOcc) & (boardState.whitePieces[BoardState.INDEX_BISHOP] | boardState.whitePieces[BoardState.INDEX_QUEEN])) != 0) {
+                return true;
+            }
+            // Rook/Queen straight attacks
+            if ((BitboardGenerator.getRookAttacks(kingSquare, allOcc) & (boardState.whitePieces[BoardState.INDEX_ROOK] | boardState.whitePieces[BoardState.INDEX_QUEEN])) != 0) {
+                return true;
+            }
+            // King adjacency
+            return (BitboardGenerator.KING_ATTACKS[kingSquare] & boardState.whitePieces[BoardState.INDEX_KING]) != 0;
         }
-        return false;
     }
 
     private static boolean hasStraightLineAttackersUnblocked(long enemyRooksAndQueens, long allOccupied, int kingSquare) {
@@ -437,7 +418,9 @@ public class BitboardMoveGenerator {
         for(FastMove move : moves) {
             BoardState.applyMove(move, boardState, afterMove);
             if(!isKingInCheck(afterMove, boardState.isWhiteToMove())) {
-                move.score =  PestoBoardEvaluation.evaluate(afterMove);
+                // Lightweight move ordering to help search without heavy evaluation:
+                // prioritize promotions and good captures to improve pruning.
+                move.score = scoreMove(move, boardState, true);
                 validMoves.add(move);
             }
         }
@@ -460,6 +443,9 @@ public class BitboardMoveGenerator {
         for(FastMove move : moves) {
             BoardState.applyMove(move, boardState, afterMove);
             if(!isKingInCheck(afterMove, boardState.isWhiteToMove())) {
+                // Lightweight move ordering to help search without heavy evaluation:
+                // prioritize promotions and good captures to improve pruning.
+                move.score = scoreMove(move, boardState, false);
                 validMoves.add(move);
             }
         }
@@ -854,6 +840,70 @@ public class BitboardMoveGenerator {
             move.promotion = true;
             move.pieceTypeToPromote = piece;
             moves.add(move);
+        }
+    }
+
+    // Lightweight move scoring for ordering only (no heavy evaluation)
+    private static int scoreMove(FastMove move, BoardState boardState, boolean isWhiteToMove) {
+        final long toBit = 1L << move.destinationSquare;
+        int attacker = -1;
+        long fromBit = 1L << move.originSquare;
+        if (isWhiteToMove) {
+            for (int i = 0; i < 6; i++) {
+                if ((boardState.whitePieces[i] & fromBit) != 0) { attacker = i; break; }
+            }
+        } else {
+            for (int i = 0; i < 6; i++) {
+                if ((boardState.blackPieces[i] & fromBit) != 0) { attacker = i; break; }
+            }
+        }
+
+        int score = 0;
+
+        // Promotions: strongly prioritize, scaled by promoted piece value
+        if (move.promotion) {
+            score += 10000 + pieceValue(move.pieceTypeToPromote) - pieceValue(BoardState.INDEX_PAWN);
+        }
+
+        // Captures (including en passant)
+        int victim = -1;
+        if (move.enPassant) {
+            victim = BoardState.INDEX_PAWN;
+        } else {
+            if (isWhiteToMove) {
+                for (int i = 0; i < 6; i++) {
+                    if ((boardState.blackPieces[i] & toBit) != 0) { victim = i; break; }
+                }
+            } else {
+                for (int i = 0; i < 6; i++) {
+                    if ((boardState.whitePieces[i] & toBit) != 0) { victim = i; break; }
+                }
+            }
+        }
+        if (victim != -1) {
+            // MVV-LVA style: prefer capturing more valuable with less valuable attacker
+            int mvv = pieceValue(victim);
+            int lva = attacker != -1 ? pieceValue(attacker) : 100; // fallback
+            score += 1000 + (10 * mvv - lva);
+        }
+
+        // Small bonus for castling to keep it considered
+        if (move.castling) {
+            score += 50;
+        }
+
+        return score;
+    }
+
+    private static int pieceValue(int pieceIndex) {
+        switch (pieceIndex) {
+            case BoardState.INDEX_PAWN: return 100;
+            case BoardState.INDEX_KNIGHT: return 320;
+            case BoardState.INDEX_BISHOP: return 330;
+            case BoardState.INDEX_ROOK: return 500;
+            case BoardState.INDEX_QUEEN: return 900;
+            case BoardState.INDEX_KING: return 20000; // only for ordering context
+            default: return 0;
         }
     }
 }

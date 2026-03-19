@@ -373,9 +373,10 @@ public class BestMoveCalculator {
                     .ply(ply)
                     .build();
         }
-
-
-        legalMoves.sort(Collections.reverseOrder((a, b) -> Integer.compare(b.score, a.score)));
+        
+        
+        // Sort best-first by our lightweight move score (higher is better)
+        legalMoves.sort((a, b) -> Integer.compare(b.score, a.score));
 
         if (isMaximizingPlayer) {
             int bestScore = -MATE_SCORE - 1000;
@@ -686,16 +687,31 @@ public class BestMoveCalculator {
 
     private ScoreAndMove searchForBestMoveWithinScores(Collection<ScoreAndMove> scores) {
         ScoreAndMove bestMoveSoFar = null;
-        for (ScoreAndMove score : scores) {
+        for (ScoreAndMove cand : scores) {
             if (bestMoveSoFar == null) {
-                bestMoveSoFar = score;
+                bestMoveSoFar = cand;
+                continue;
             }
-
-            if (score.getScore().getScore() > bestMoveSoFar.getScore().getScore()) {
-                bestMoveSoFar = score;
+            int s1 = cand.getScore().getScore();
+            int s2 = bestMoveSoFar.getScore().getScore();
+            if (s1 > s2) {
+                bestMoveSoFar = cand;
+            } else if (s1 == s2) {
+                // Tie-breakers to improve determinism and tactical preference
+                boolean candIsPromo = isPromotionMove(cand.getMove());
+                boolean bestIsPromo = isPromotionMove(bestMoveSoFar.getMove());
+                if (candIsPromo && !bestIsPromo) {
+                    bestMoveSoFar = cand;
+                }
             }
         }
         return bestMoveSoFar;
+    }
+
+    private boolean isPromotionMove(Move move) {
+        // Chesslib move string for promotions typically ends with promotion piece letter, e.g., a7a8q
+        String lan = moveToLAN(move);
+        return lan.length() == 5; // crude but effective for our usage
     }
 
     private ScoreAndMove searchForBestMoveWithinResults(AtomicReference<List<ScoreAndMove>> thisDepthsBestMove) {
